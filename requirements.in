@@ -1,0 +1,15 @@
+-f https://download.pytorch.org/whl/cu113
+-e file:./
+
+# notebooking
+jupyterlab
+nb_black
+
+# precommit
+pre-commit
+
+# testing
+pytest
+
+# workflows
+luigi
