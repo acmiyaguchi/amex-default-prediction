@@ -10,6 +10,3 @@ pre-commit
 
 # testing
 pytest
-
-# workflows
-luigi

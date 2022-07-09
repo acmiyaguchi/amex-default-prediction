@@ -1,43 +1,24 @@
-import os
 from pathlib import Path
 
-import luigi
-import luigi.contrib.spark
-import pyspark
+import click
+
+from .utils import build_wheel, run_spark
 
 
-def get_python_path():
-    venv_path = os.environ.get("VIRTUAL_ENV")
-    if venv_path is None:
-        return "python"
-    # get the python in the virtual environment if it exists
-    python_exe = list(Path(venv_path).glob("**/python.exe"))
-    if python_exe:
-        return python_exe[0].as_posix()
-    return "python"
+@click.command()
+@click.option("--print-only/--no-print-only", default=False)
+def main(print_only):
+    data_root = Path("data")
+    raw_root = data_root / "raw"
+    intermediate_root = data_root / "intermediate"
+    build_wheel()
+    for file in raw_root.glob("**/*.csv"):
+        output = intermediate_root / file.name.replace(".csv", "")
+        run_spark(
+            f"transform raw-to-parquet {file} {output} --num-partitions 256",
+            print_only=print_only,
+        )
 
 
-os.environ["SPARK_HOME"] = pyspark.__path__[0]
-
-
-class RawIntoParquet(luigi.contrib.spark.SparkSubmitTask):
-    app = "main.py"
-    master = "local[*]"
-
-    spark_submit = "spark-submit.cmd"
-    pyspark_python = "python"
-    py_files = [sorted(Path("dist").glob("*.egg"))[-1].as_posix()]
-    filename = "train_labels"
-
-    def output(self):
-        return luigi.LocalTarget(f"data/intermediate/{self.filename}")
-
-    def app_options(self):
-        return [
-            "transform",
-            "raw-to-parquet",
-            f"data/raw/amex-default-prediction/{self.filename}.csv",
-            self.output().path,
-            "--num-partitions",
-            "64",
-        ]
+if __name__ == "__main__":
+    main()
