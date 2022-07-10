@@ -29,3 +29,6 @@ python -m workflow.transform
 - https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html#pyspark.ml.feature.VectorAssembler
 - https://spark.apache.org/docs/latest/monitoring.html#viewing-after-the-fact
 - https://spark.apache.org/docs/latest/ml-pipeline.html#example-pipeline
+- https://spark.apache.org/docs/latest/api/python/_modules/pyspark/ml/util.html#MLWriter
+- https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.util.MLWritable.html#pyspark.ml.util.MLWritable
+- https://stackoverflow.com/questions/40284214/is-there-any-means-to-serialize-custom-transformer-in-spark-ml-pipeline

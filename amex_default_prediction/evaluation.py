@@ -1,5 +1,6 @@
 import pandas as pd
 from pyspark.ml.evaluation import Evaluator
+from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
 from pyspark.sql import functions as F
 
 
@@ -41,10 +42,17 @@ def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
     return 0.5 * (g + d)
 
 
-class AmexMetricEvaluator(Evaluator):
+class AmexMetricEvaluator(Evaluator, DefaultParamsWritable, DefaultParamsReadable):
     def __init__(self, predictionCol="prediction", labelCol="label"):
         self.predictionCol = predictionCol
         self.labelCol = labelCol
+
+        # for the default params writable
+        self.uid = self.__class__.__name__
+        self._paramMap = {}
+        self._defaultParamMap = {}
+        # for the default params readable
+        self._params = {}
 
     def _evaluate(self, dataset):
         df = dataset.select(

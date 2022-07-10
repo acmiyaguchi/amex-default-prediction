@@ -1,3 +1,5 @@
+import datetime
+import re
 from pathlib import Path
 from subprocess import run
 
@@ -8,6 +10,31 @@ def build_wheel():
 
 def get_wheel():
     return sorted(Path("dist").glob("*.whl"))[-1].as_posix()
+
+
+def get_date_string():
+    """Date string down to the seconds, only digits"""
+    return re.sub(r"[^\d]+", "", datetime.datetime.utcnow().isoformat())[:14]
+
+
+def get_head_rev_hash():
+    return (
+        run("git rev-parse --short HEAD", shell=True, check=True, capture_output=True)
+        .stdout.decode()
+        .strip()
+    )
+
+
+def get_package_version():
+    return (
+        run("python setup.py --version", shell=True, check=True, capture_output=True)
+        .stdout.decode()
+        .strip()
+    )
+
+
+def unique_name():
+    return f"{get_date_string()}-{get_package_version()}-{get_head_rev_hash()}"
 
 
 def run_spark(task, master="local[*]", spark_driver_memory="32g", print_only=False):

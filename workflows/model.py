@@ -2,27 +2,26 @@ from pathlib import Path
 
 import click
 
-from .utils import build_wheel, run_spark
+from .utils import build_wheel, run_spark, unique_name
 
 
 @click.command()
-@click.option("--overwrite/--no-overwrite", default=False)
-def main(overwrite):
+@click.argument("model_name", type=click.Choice(["logistic", "fm"]))
+def main(model_name):
     data_root = Path("data")
     intermediate_root = data_root / "intermediate"
     build_wheel()
 
-    output = intermediate_root / "models" / "logistic"
+    output = intermediate_root / "models" / model_name / unique_name()
     run_spark(
         " ".join(
             [
-                "logistic",
+                model_name,
                 "fit",
                 (intermediate_root / "train_data_preprocessed").as_posix(),
                 output.as_posix(),
             ]
         ),
-        print_only=output.exists() and not overwrite,
     )
 
 
