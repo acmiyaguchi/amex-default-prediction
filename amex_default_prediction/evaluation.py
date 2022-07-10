@@ -3,7 +3,7 @@ from pyspark.ml.evaluation import Evaluator
 from pyspark.sql import functions as F
 
 
-def amex_metric_pandas(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
+def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
     """Metric taken from the competition notebook.
 
     https://www.kaggle.com/code/inversion/amex-competition-metric-python
@@ -41,7 +41,7 @@ def amex_metric_pandas(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
     return 0.5 * (g + d)
 
 
-class AmexEvaluator(Evaluator):
+class AmexMetricEvaluator(Evaluator):
     def __init__(self, predictionCol="prediction", labelCol="label"):
         self.predictionCol = predictionCol
         self.labelCol = labelCol
@@ -51,7 +51,7 @@ class AmexEvaluator(Evaluator):
             F.col(self.labelCol).alias("target"),
             F.col(self.predictionCol).alias("prediction"),
         ).toPandas()
-        return amex_metric_pandas(df[["target"]], df[["prediction"]])
+        return amex_metric(df[["target"]], df[["prediction"]])
 
     def isLargerBetter(self):
         return True

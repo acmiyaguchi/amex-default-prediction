@@ -25,6 +25,7 @@ def run_spark(task, master="local[*]", spark_driver_memory="32g", print_only=Fal
             "--conf spark.eventLog.dir=data/logging",
             # https://stackoverflow.com/a/46897622
             "--conf spark.ui.showConsoleProgress=true",
+            "--conf spark.sql.execution.arrow.pyspark.enabled=true",
             f"--py-files {get_wheel()}",
             "main.py",
             task,
