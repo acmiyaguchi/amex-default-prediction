@@ -1,14 +1,7 @@
 import numpy as np
 import pandas as pd
-import pytest
 
 from amex_default_prediction.evaluation import AmexMetricEvaluator, amex_metric
-from amex_default_prediction.utils import spark_session
-
-
-@pytest.fixture(scope="session")
-def spark():
-    return spark_session()
 
 
 def test_all_right_ones(spark):
@@ -31,3 +24,9 @@ def test_random_target_prediction(spark):
     assert AmexMetricEvaluator("prediction", "target").evaluate(
         spark.createDataFrame(pd.concat([y_true, y_pred], axis="columns")),
     ) == amex_metric(y_true, y_pred)
+
+
+def test_amex_metric_evaluator_persists(tmp_path):
+    evaluator = AmexMetricEvaluator()
+    evaluator.write().overwrite().save(str(tmp_path))
+    loaded_evaluator = AmexMetricEvaluator.read().load(str(tmp_path))

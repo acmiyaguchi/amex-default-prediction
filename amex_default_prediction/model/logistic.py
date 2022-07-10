@@ -15,14 +15,23 @@ def logistic():
 @logistic.command()
 @click.argument("train_data_preprocessed_path", type=click.Path(exists=True))
 @click.argument("output_path", type=click.Path())
+@click.option("--train-ratio", default=0.8, type=float)
 @click.option("--parallelism", default=8, type=int)
-def fit(train_data_preprocessed_path, output_path, parallelism):
+def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
     spark = spark_session()
-    lr = LogisticRegression(family="binomial", probabilityCol="probability")
+    model = LogisticRegression(family="binomial", probabilityCol="probability")
     grid = (
         ParamGridBuilder()
-        .addGrid(lr.regParam, [0.1, 1, 10])
-        .addGrid(lr.elasticNetParam, [0, 0.5, 1])
+        .addGrid(model.regParam, [0.1, 1])
+        .addGrid(model.elasticNetParam, [0, 0.5, 1])
         .build()
     )
-    fit_simple(spark, lr, grid, train_data_preprocessed_path, output_path, parallelism)
+    fit_simple(
+        spark,
+        model,
+        grid,
+        train_data_preprocessed_path,
+        output_path,
+        train_ratio,
+        parallelism,
+    )

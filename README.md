@@ -32,3 +32,5 @@ python -m workflow.transform
 - https://spark.apache.org/docs/latest/api/python/_modules/pyspark/ml/util.html#MLWriter
 - https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.util.MLWritable.html#pyspark.ml.util.MLWritable
 - https://stackoverflow.com/questions/40284214/is-there-any-means-to-serialize-custom-transformer-in-spark-ml-pipeline
+- https://spark.apache.org/docs/2.4.0/sql-pyspark-pandas-with-arrow.html
+- https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
