@@ -1,6 +1,5 @@
 import pandas as pd
 from pyspark.ml.evaluation import Evaluator
-from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 
@@ -47,59 +46,12 @@ class AmexEvaluator(Evaluator):
         self.predictionCol = predictionCol
         self.labelCol = labelCol
 
-    def _top_four_percent_captured(self, dataset):
-        window = Window.orderBy(F.desc(self.predictionCol)).rangeBetween(
-            Window.unboundedPreceding, 0
-        )
-        window_all = Window.partitionBy()
-        return (
-            dataset.orderBy(F.desc(self.predictionCol))
-            .withColumn("weight", F.when(F.col(self.labelCol) == 0, 20).otherwise(1))
-            .withColumn("four_pct_cutoff", 0.04 * F.sum("weight").over(window_all))
-            .withColumn("weight_cumsum", F.sum("weight").over(window))
-            .select(
-                (
-                    F.sum(F.expr("weight_cumsum <= four_pct_cutoff").cast("float"))
-                    / F.sum(self.labelCol)
-                ).alias("top_four_percent_captured")
-            )
-            .collect()[0]["top_four_percent_captured"]
-        )
-
-    def _weighted_gini(self, dataset):
-        window = Window.orderBy(F.desc(self.predictionCol)).rangeBetween(
-            Window.unboundedPreceding, 0
-        )
-        window_all = Window.partitionBy()
-        return (
-            dataset.orderBy(F.desc(self.predictionCol))
-            .withColumn("weight", F.when(F.col(self.labelCol) == 0, 20).otherwise(1))
-            .withColumn(
-                "random",
-                F.sum(F.col("weight") / F.sum("weight").over(window_all)).over(window),
-            )
-            .withColumn(
-                "total_pos",
-                F.sum(F.col(self.labelCol) * F.col("weight")).over(window_all),
-            )
-            .withColumn(
-                "cum_pos_found",
-                F.sum(F.col(self.labelCol) * F.col("weight")).over(window),
-            )
-            .withColumn(
-                "lorentz",
-                F.expr("cum_pos_found / total_pos"),
-            )
-            .withColumn("gini", F.expr("(lorentz - random) * weight"))
-            .select(F.sum("gini").alias("weighted_gini"))
-            .collect()[0]["weighted_gini"]
-        )
-
     def _evaluate(self, dataset):
-        g = self._weighted_gini(dataset)
-        d = self._top_four_percent_captured(dataset)
-        print(g, d)
-        return 0.5 * (g + d)
+        df = dataset.select(
+            F.col(self.labelCol).alias("target"),
+            F.col(self.predictionCol).alias("prediction"),
+        ).toPandas()
+        return amex_metric_pandas(df[["target"]], df[["prediction"]])
 
     def isLargerBetter(self):
         return True
