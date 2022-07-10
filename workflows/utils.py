@@ -11,6 +11,7 @@ def get_wheel():
 
 
 def run_spark(task, master="local[*]", spark_driver_memory="32g", print_only=False):
+    Path("data/logging").mkdir(parents=True, exist_ok=True)
     cmd = " ".join(
         [
             "spark-submit",
@@ -19,6 +20,11 @@ def run_spark(task, master="local[*]", spark_driver_memory="32g", print_only=Fal
             f"--conf spark.driver.memory={spark_driver_memory}",
             # use the local disk in the data directory for spill
             "--conf spark.local.dir=data/tmp/spark",
+            # https://spark.apache.org/docs/latest/monitoring.html#viewing-after-the-fact
+            "--conf spark.eventLog.enabled=true",
+            "--conf spark.eventLog.dir=data/logging",
+            # https://stackoverflow.com/a/46897622
+            "--conf spark.ui.showConsoleProgress=true",
             f"--py-files {get_wheel()}",
             "main.py",
             task,

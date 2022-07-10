@@ -19,10 +19,13 @@ pre-commit install
 ## work log
 
 ```bash
-luigi --local-scheduler --module workflows.transform_parquet
+python -m workflow.transform
 ```
 
 ### resource
 
 - https://www.markhneedham.com/blog/2017/03/25/luigi-externalprogramtask-example-converting-json-csv/
 - https://luigi.readthedocs.io/en/stable/example_top_artists.html
+- https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html#pyspark.ml.feature.VectorAssembler
+- https://spark.apache.org/docs/latest/monitoring.html#viewing-after-the-fact
+- https://spark.apache.org/docs/latest/ml-pipeline.html#example-pipeline
