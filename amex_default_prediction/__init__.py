@@ -1,5 +1,6 @@
 import click
 
+from .model.logistic import logistic
 from .transform import transform
 
 
@@ -8,4 +9,5 @@ def cli():
     pass
 
 
-cli.add_command(transform)
+for command in [transform, logistic]:
+    cli.add_command(command)
