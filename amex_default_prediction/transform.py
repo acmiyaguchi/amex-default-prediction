@@ -3,8 +3,10 @@ from pathlib import Path
 import click
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import Imputer, OneHotEncoder, StringIndexer, VectorAssembler
-from pyspark.sql import SparkSession, Window
+from pyspark.sql import Window
 from pyspark.sql import functions as F
+
+from .utils import spark_session
 
 
 @click.group()
@@ -17,9 +19,7 @@ def transform():
 @click.argument("output_path", type=click.Path())
 @click.option("--num-partitions", default=64, type=int)
 def raw_to_parquet(input_path, output_path, num_partitions):
-    spark = SparkSession.builder.getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
-    df = spark.read.csv(input_path, header=True).repartition(num_partitions)
+    df = spark_session().read.csv(input_path, header=True).repartition(num_partitions)
     df.write.parquet(output_path, mode="overwrite")
 
 
@@ -55,8 +55,7 @@ def prepare_dataset(train_data, train_labels):
 @click.argument("output_path", type=click.Path())
 @click.option("--limit", default=None, type=int)
 def preprocess_training_dataset(train_data_path, train_labels_path, output_path, limit):
-    spark = SparkSession.builder.getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
+    spark = spark_session()
     train_data = spark.read.parquet(train_data_path)
     if limit:
         train_data = train_data.limit(limit)

@@ -1,16 +1,14 @@
 import numpy as np
 import pandas as pd
 import pytest
-from pyspark.sql import SparkSession
 
 from amex_default_prediction.evaluation import AmexMetricEvaluator, amex_metric
+from amex_default_prediction.utils import spark_session
 
 
 @pytest.fixture(scope="session")
 def spark():
-    spark = SparkSession.builder.getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
-    return spark
+    return spark_session()
 
 
 def test_all_right_ones(spark):
