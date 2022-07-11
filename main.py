@@ -1,3 +1,3 @@
-from amex_default_prediction import cli
+from amex_default_prediction import cli, fit
 
 cli()

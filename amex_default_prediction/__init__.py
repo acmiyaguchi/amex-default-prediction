@@ -1,8 +1,6 @@
 import click
 
-from .model.fm import fm
-from .model.gbt import gbt
-from .model.logistic import logistic
+from .model import fm, gbt, logistic
 from .transform import transform
 
 
@@ -11,5 +9,14 @@ def cli():
     pass
 
 
-for command in [transform, logistic, fm, gbt]:
+@click.group()
+def fit():
+    pass
+
+
+fit.add_command(logistic.fit, "logistic")
+fit.add_command(gbt.fit, "gbt")
+fit.add_command(fm.fit, "fm")
+
+for command in [transform, fit]:
     cli.add_command(command)

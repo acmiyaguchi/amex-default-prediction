@@ -16,8 +16,8 @@ def main(model_name):
     run_spark(
         " ".join(
             [
-                model_name,
                 "fit",
+                model_name,
                 (intermediate_root / "train_data_preprocessed").as_posix(),
                 output.as_posix(),
             ]
