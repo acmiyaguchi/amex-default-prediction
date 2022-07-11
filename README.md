@@ -34,3 +34,4 @@ python -m workflow.transform
 - https://stackoverflow.com/questions/40284214/is-there-any-means-to-serialize-custom-transformer-in-spark-ml-pipeline
 - https://spark.apache.org/docs/2.4.0/sql-pyspark-pandas-with-arrow.html
 - https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
+- https://csyhuang.github.io/2020/08/01/custom-transformer/

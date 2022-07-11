@@ -10,7 +10,7 @@ def test_all_right_ones(spark):
     y_pred = pd.DataFrame({"prediction": np.ones(n)})
     assert amex_metric(y_true, y_pred) == 0.5
     assert (
-        AmexMetricEvaluator("prediction", "target").evaluate(
+        AmexMetricEvaluator(predictionCol="prediction", labelCol="target").evaluate(
             spark.createDataFrame(pd.concat([y_true, y_pred], axis="columns")),
         )
         == 0.5
@@ -21,7 +21,7 @@ def test_random_target_prediction(spark):
     n = 1000
     y_true = pd.DataFrame({"target": np.random.randint(0, 2, n)})
     y_pred = pd.DataFrame({"prediction": np.random.randint(0, 2, n)})
-    assert AmexMetricEvaluator("prediction", "target").evaluate(
+    assert AmexMetricEvaluator(predictionCol="prediction", labelCol="target").evaluate(
         spark.createDataFrame(pd.concat([y_true, y_pred], axis="columns")),
     ) == amex_metric(y_true, y_pred)
 
