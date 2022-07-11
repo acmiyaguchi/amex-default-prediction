@@ -19,6 +19,7 @@ fit.add_command(gbt.fit, "gbt")
 fit.add_command(fm.fit, "fm")
 fit.add_command(aft.fit, "aft")
 fit.add_command(logistic.fit_with_aft, "logistic-with-aft")
+fit.add_command(gbt.fit_with_aft, "gbt-with-aft")
 
 for command in [transform, fit]:
     cli.add_command(command)

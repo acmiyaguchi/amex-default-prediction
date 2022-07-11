@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pyspark.ml import Pipeline
-from pyspark.ml.feature import SQLTransformer
+from pyspark.ml.feature import SQLTransformer, VectorAssembler
 from pyspark.ml.functions import vector_to_array
 from pyspark.ml.param.shared import (
     HasInputCol,
@@ -11,10 +11,9 @@ from pyspark.ml.param.shared import (
     TypeConverters,
 )
 from pyspark.ml.pipeline import Transformer
-from pyspark.ml.tuning import CrossValidator
+from pyspark.ml.tuning import CrossValidator, CrossValidatorModel
 from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
 from pyspark.sql import functions as F
-from pyspark.sql import types as T
 
 from amex_default_prediction.evaluation import AmexMetricEvaluator
 
@@ -92,7 +91,8 @@ def read_train_data(spark, train_data_preprocessed_path, train_ratio):
     print(f"training ratio: {train_ratio}")
     print(f"train_count: {train_count.total}, positive: {train_count.positive}")
     print(
-        f"validation_count: {validation_count.total}, positive: {validation_count.positive}"
+        f"validation_count: {validation_count.total}, "
+        f"positive: {validation_count.positive}"
     )
 
     return data, train_data, validation_data
@@ -146,6 +146,51 @@ def fit_simple(
         spark,
         Pipeline(
             stages=[
+                model,
+                ExtractVectorIndexTransformer(
+                    inputCol="probability", outputCol="pred", indexCol=1
+                ),
+            ]
+        ),
+        grid,
+        AmexMetricEvaluator(predictionCol="pred", labelCol="label"),
+        train_data_preprocessed_path,
+        output_path,
+        train_ratio,
+        parallelism,
+    )
+
+
+def fit_simple_with_aft(
+    spark,
+    model,
+    grid,
+    train_data_preprocessed_path,
+    aft_model_path,
+    output_path,
+    train_ratio=0.8,
+    parallelism=4,
+):
+    aft_model = CrossValidatorModel.read().load(aft_model_path)
+    fit_generic(
+        spark,
+        Pipeline(
+            stages=[
+                aft_model.bestModel,
+                VectorAssembler(
+                    inputCols=["features", "quantiles_probability"],
+                    outputCol="features_with_aft",
+                ),
+                # lets keep a subset of fields
+                SQLTransformer(
+                    statement="""
+                        SELECT
+                            customer_ID,
+                            features_with_aft as features,
+                            label
+                        FROM __THIS__
+                    """
+                ),
                 model,
                 ExtractVectorIndexTransformer(
                     inputCol="probability", outputCol="pred", indexCol=1

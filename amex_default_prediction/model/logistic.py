@@ -1,13 +1,10 @@
 import click
-from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.classification import LogisticRegression
-from pyspark.ml.feature import SQLTransformer, StandardScaler, VectorAssembler
-from pyspark.ml.tuning import CrossValidatorModel, ParamGridBuilder
+from pyspark.ml.tuning import ParamGridBuilder
 
-from amex_default_prediction.evaluation import AmexMetricEvaluator
 from amex_default_prediction.utils import spark_session
 
-from .base import ExtractVectorIndexTransformer, fit_generic, fit_simple
+from .base import fit_simple, fit_simple_with_aft
 
 
 @click.command()
@@ -45,46 +42,19 @@ def fit_with_aft(
     train_data_preprocessed_path, aft_model_path, output_path, train_ratio, parallelism
 ):
     spark = spark_session()
-    aft_model = CrossValidatorModel.read().load(aft_model_path)
-    model = LogisticRegression(
-        featuresCol="features_with_aft",
-        family="binomial",
-        probabilityCol="probability",
-    )
+    model = LogisticRegression(family="binomial", probabilityCol="probability")
     grid = (
         ParamGridBuilder()
         .addGrid(model.regParam, [0.1, 1])
         .addGrid(model.elasticNetParam, [0, 0.5, 1])
         .build()
     )
-    fit_generic(
+    fit_simple_with_aft(
         spark,
-        Pipeline(
-            stages=[
-                aft_model.bestModel,
-                StandardScaler(
-                    inputCol="quantiles_probability",
-                    outputCol="aft_scaled",
-                    withStd=True,
-                    withMean=True,
-                ),
-                VectorAssembler(
-                    inputCols=["features", "aft_scaled"],
-                    outputCol="features_with_aft",
-                ),
-                # lets keep a subset of fields
-                SQLTransformer(
-                    statement="SELECT customer_ID, features_with_aft, label FROM __THIS__"
-                ),
-                model,
-                ExtractVectorIndexTransformer(
-                    inputCol="probability", outputCol="pred", indexCol=1
-                ),
-            ]
-        ),
+        model,
         grid,
-        AmexMetricEvaluator(predictionCol="pred", labelCol="label"),
         train_data_preprocessed_path,
+        aft_model_path,
         output_path,
         train_ratio,
         parallelism,
