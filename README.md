@@ -35,3 +35,4 @@ python -m workflow.transform
 - https://spark.apache.org/docs/2.4.0/sql-pyspark-pandas-with-arrow.html
 - https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
 - https://csyhuang.github.io/2020/08/01/custom-transformer/
+- https://stackoverflow.com/questions/41399399/serialize-a-custom-transformer-using-python-to-be-used-within-a-pyspark-ml-pipel

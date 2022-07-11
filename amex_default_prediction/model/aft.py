@@ -29,7 +29,10 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
     cols_except_age = [i for i, v in enumerate(params["inputCols"]) if v != "age"]
 
     model = AFTSurvivalRegression(
-        featuresCol="features_except_age", labelCol="age_plus_one", censorCol="censor"
+        featuresCol="features_except_age",
+        labelCol="age_plus_one",
+        censorCol="censor",
+        quantilesCol="quantiles_probability",
     )
     grid = ParamGridBuilder().addGrid(model.aggregationDepth, [2]).build()
     fit_generic(
@@ -50,7 +53,7 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
                     statement="""
                         SELECT
                             *,
-                            if(label=1, 0, 1) as censor,
+                            label as censor,
                             age + 1 as age_plus_one
                         FROM __THIS__
                     """
