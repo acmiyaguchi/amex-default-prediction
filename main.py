@@ -1,3 +1,4 @@
 from amex_default_prediction import cli, fit
 
-cli()
+if __name__ == "__main__":
+    cli()

@@ -20,7 +20,11 @@ pre-commit install
 
 ```bash
 python -m workflow.transform
+python -m workflow.model logistic  # and others
 ```
+
+I spent 6 hours or so trying to use sparktorch on my local machine. Much trial
+and error has lead to a few developments...
 
 ### resource
 
@@ -36,3 +40,6 @@ python -m workflow.transform
 - https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
 - https://csyhuang.github.io/2020/08/01/custom-transformer/
 - https://stackoverflow.com/questions/41399399/serialize-a-custom-transformer-using-python-to-be-used-within-a-pyspark-ml-pipel
+- https://stackoverflow.com/questions/37270446/how-to-create-a-custom-estimator-in-pyspark
+- https://stackoverflow.com/questions/18204782/runtimeerror-on-windows-trying-python-multiprocessing
+- https://github.com/pytorch/pytorch/issues/25767

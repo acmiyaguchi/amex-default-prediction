@@ -100,35 +100,29 @@ def read_train_data(spark, train_data_preprocessed_path, train_ratio):
 
 def fit_generic(
     spark,
-    pipeline,
-    grid,
+    model,
     evaluator,
     train_data_preprocessed_path,
     output_path,
     train_ratio=0.8,
-    parallelism=4,
+    read_func=read_train_data,
 ):
     """Fit function that can be used with a variety of models for quick
     iteration. Assumes that preprocessing has already been done."""
-    data, train_data, validation_data = read_train_data(
+    data, train_data, validation_data = read_func(
         spark, train_data_preprocessed_path, train_ratio
     )
-    cv = CrossValidator(
-        estimator=pipeline,
-        estimatorParamMaps=grid,
-        evaluator=evaluator,
-        parallelism=parallelism,
-    )
-    cv_model = cv.fit(train_data)
 
-    train_eval = evaluator.evaluate(cv_model.transform(train_data))
-    validation_eval = evaluator.evaluate(cv_model.transform(validation_data))
-    total_eval = evaluator.evaluate(cv_model.transform(data))
+    fit_model = model.fit(train_data)
+
+    train_eval = evaluator.evaluate(fit_model.transform(train_data))
+    validation_eval = evaluator.evaluate(fit_model.transform(validation_data))
+    total_eval = evaluator.evaluate(fit_model.transform(data))
     print(f"train eval: {train_eval}")
     print(f"validation eval: {validation_eval}")
     print(f"total eval: {total_eval}")
 
-    cv_model.write().overwrite().save(Path(output_path).as_posix())
+    fit_model.write().overwrite().save(Path(output_path).as_posix())
     print(f"wrote to {output_path}")
 
 
@@ -140,24 +134,30 @@ def fit_simple(
     output_path,
     train_ratio=0.8,
     parallelism=4,
+    read_func=read_train_data,
 ):
     """Fit function that handles binary prediction using the Amex metric"""
+    evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
     fit_generic(
         spark,
-        Pipeline(
-            stages=[
-                model,
-                ExtractVectorIndexTransformer(
-                    inputCol="probability", outputCol="pred", indexCol=1
-                ),
-            ]
+        CrossValidator(
+            estimator=Pipeline(
+                stages=[
+                    model,
+                    ExtractVectorIndexTransformer(
+                        inputCol="probability", outputCol="pred", indexCol=1
+                    ),
+                ]
+            ),
+            estimatorParamMaps=grid,
+            evaluator=evaluator,
+            parallelism=parallelism,
         ),
-        grid,
-        AmexMetricEvaluator(predictionCol="pred", labelCol="label"),
+        evaluator,
         train_data_preprocessed_path,
         output_path,
         train_ratio,
-        parallelism,
+        read_func,
     )
 
 
@@ -170,37 +170,43 @@ def fit_simple_with_aft(
     output_path,
     train_ratio=0.8,
     parallelism=4,
+    read_func=read_train_data,
 ):
     aft_model = CrossValidatorModel.read().load(aft_model_path)
+    evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
     fit_generic(
         spark,
-        Pipeline(
-            stages=[
-                aft_model.bestModel,
-                VectorAssembler(
-                    inputCols=["features", "quantiles_probability"],
-                    outputCol="features_with_aft",
-                ),
-                # lets keep a subset of fields
-                SQLTransformer(
-                    statement="""
+        CrossValidator(
+            estimator=Pipeline(
+                stages=[
+                    aft_model.bestModel,
+                    VectorAssembler(
+                        inputCols=["features", "quantiles_probability"],
+                        outputCol="features_with_aft",
+                    ),
+                    # lets keep a subset of fields
+                    SQLTransformer(
+                        statement="""
                         SELECT
                             customer_ID,
                             features_with_aft as features,
                             label
                         FROM __THIS__
                     """
-                ),
-                model,
-                ExtractVectorIndexTransformer(
-                    inputCol="probability", outputCol="pred", indexCol=1
-                ),
-            ]
+                    ),
+                    model,
+                    ExtractVectorIndexTransformer(
+                        inputCol="probability", outputCol="pred", indexCol=1
+                    ),
+                ]
+            ),
+            estimatorParamMaps=grid,
+            evaluator=evaluator,
+            parallelism=parallelism,
         ),
-        grid,
-        AmexMetricEvaluator(predictionCol="pred", labelCol="label"),
+        evaluator,
         train_data_preprocessed_path,
         output_path,
         train_ratio,
-        parallelism,
+        read_func,
     )

@@ -17,6 +17,7 @@ setuptools.setup(
         "pyarrow",
         "pyspark",
         "torch",
+        "sparktorch",
         "pytorch-lightning",
         "torch-summary",
         'importlib-metadata>=0.12;python_version<"3.8"',

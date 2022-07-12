@@ -59,6 +59,7 @@ click==8.1.3
     # via
     #   amex-default-prediction
     #   black
+    #   flask
 colorama==0.4.5
     # via
     #   click
@@ -73,6 +74,8 @@ decorator==5.1.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
+dill==0.3.5.1
+    # via sparktorch
 distlib==0.3.4
     # via virtualenv
 entrypoints==0.4
@@ -85,6 +88,8 @@ fastjsonschema==2.15.3
     # via nbformat
 filelock==3.7.1
     # via virtualenv
+flask==2.1.2
+    # via sparktorch
 fonttools==4.34.4
     # via matplotlib
 frozenlist==1.3.0
@@ -119,10 +124,13 @@ ipython==8.4.0
     #   nb-black
 ipython-genutils==0.2.0
     # via nbclassic
+itsdangerous==2.1.2
+    # via flask
 jedi==0.18.1
     # via ipython
 jinja2==3.1.2
     # via
+    #   flask
     #   jupyter-server
     #   jupyterlab
     #   jupyterlab-server
@@ -326,6 +334,7 @@ requests==2.28.1
     #   fsspec
     #   jupyterlab-server
     #   requests-oauthlib
+    #   sparktorch
     #   tensorboard
 requests-oauthlib==1.3.1
     # via google-auth-oauthlib
@@ -347,6 +356,8 @@ sniffio==1.2.0
     # via anyio
 soupsieve==2.3.2.post1
     # via beautifulsoup4
+sparktorch==0.1.2
+    # via amex-default-prediction
 stack-data==0.3.0
     # via ipython
 tensorboard==2.9.1
@@ -371,6 +382,7 @@ torch==1.12.0
     # via
     #   amex-default-prediction
     #   pytorch-lightning
+    #   sparktorch
     #   torchmetrics
 torch-summary==1.4.5
     # via amex-default-prediction
@@ -417,7 +429,9 @@ webencodings==0.5.1
 websocket-client==1.3.3
     # via jupyter-server
 werkzeug==2.1.2
-    # via tensorboard
+    # via
+    #   flask
+    #   tensorboard
 wheel==0.37.1
     # via tensorboard
 yarl==1.7.2

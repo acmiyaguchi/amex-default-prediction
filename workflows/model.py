@@ -9,7 +9,7 @@ from .utils import build_wheel, run_spark, unique_name
 @click.argument(
     "model_name",
     type=click.Choice(
-        ["logistic", "fm", "gbt", "aft", "logistic-with-aft", "gbt-with-aft"]
+        ["logistic", "fm", "gbt", "aft", "logistic-with-aft", "gbt-with-aft", "nn"]
     ),
 )
 def main(model_name):
