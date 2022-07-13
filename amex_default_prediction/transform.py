@@ -195,12 +195,8 @@ def preprocess_training_dataset(
     # ensure that all of our columns are actually floating point values
     transforms = pipeline.fit(train_data)
 
-    df = (
-        transforms.transform(train_data)
-        .join(train_labels, on="customer_ID")
-        .repartition("sample_id")
-    )
-    df.show(n=3, vertical=True, truncate=100)
+    df = transforms.transform(train_data).join(train_labels, on="customer_ID")
+    df.printSchema()
 
     transforms.write().overwrite().save((Path(output_path) / "pipeline").as_posix())
     df.write.parquet((Path(output_path) / "data").as_posix(), mode="overwrite")

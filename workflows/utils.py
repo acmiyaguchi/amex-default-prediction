@@ -4,12 +4,21 @@ from pathlib import Path
 from subprocess import run
 
 
+def get_package_version():
+    return (
+        run("python setup.py --version", shell=True, check=True, capture_output=True)
+        .stdout.decode()
+        .strip()
+    )
+
+
 def build_wheel():
     run("python setup.py bdist_wheel", shell=True, check=True)
 
 
 def get_wheel():
-    return sorted(Path("dist").glob("*.whl"))[-1].as_posix()
+    version = get_package_version()
+    return sorted(Path("dist").glob(f"*{version}*.whl"))[-1].as_posix()
 
 
 def get_date_string():
@@ -25,19 +34,11 @@ def get_head_rev_hash():
     )
 
 
-def get_package_version():
-    return (
-        run("python setup.py --version", shell=True, check=True, capture_output=True)
-        .stdout.decode()
-        .strip()
-    )
-
-
 def unique_name():
     return f"{get_date_string()}-{get_package_version()}-{get_head_rev_hash()}"
 
 
-def run_spark(task, master="local[*]", spark_driver_memory="32g", print_only=False):
+def run_spark(task, master="local[*]", spark_driver_memory="40g", print_only=False):
     Path("data/logging").mkdir(parents=True, exist_ok=True)
     cmd = " ".join(
         [
@@ -53,6 +54,7 @@ def run_spark(task, master="local[*]", spark_driver_memory="32g", print_only=Fal
             # https://stackoverflow.com/a/46897622
             "--conf spark.ui.showConsoleProgress=true",
             "--conf spark.sql.execution.arrow.pyspark.enabled=true",
+            "--conf spark.driver.maxResultSize=4g",
             f"--py-files {get_wheel()}",
             "main.py",
             task,
