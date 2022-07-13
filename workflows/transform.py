@@ -20,7 +20,7 @@ def main(overwrite):
             print_only=print_only,
         )
 
-    output = intermediate_root / "train_data_preprocessed"
+    output = intermediate_root / "train_data_preprocessed_v2"
     run_spark(
         " ".join(
             [
