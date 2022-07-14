@@ -1,6 +1,6 @@
 import click
 
-from .model import aft, fm, gbt, logistic, nn
+from .model import aft, gbt, logistic, nn
 from .transform import transform_group
 
 
@@ -16,7 +16,6 @@ def fit():
 
 fit.add_command(logistic.fit, "logistic")
 fit.add_command(gbt.fit, "gbt")
-fit.add_command(fm.fit, "fm")
 fit.add_command(aft.fit, "aft")
 fit.add_command(logistic.fit_with_aft, "logistic-with-aft")
 fit.add_command(gbt.fit_with_aft, "gbt-with-aft")
