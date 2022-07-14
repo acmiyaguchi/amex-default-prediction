@@ -195,7 +195,13 @@ def preprocess_training_dataset(
     # ensure that all of our columns are actually floating point values
     transforms = pipeline.fit(train_data)
 
-    df = transforms.transform(train_data).join(train_labels, on="customer_ID")
+    df = (
+        transforms.transform(train_data).join(train_labels, on="customer_ID")
+        # only return the label/default event on the most recent row of data
+        .withColumn(
+            "label", F.when(F.col("most_recent"), F.col("label")).otherwise(F.lit(0.0))
+        )
+    )
     df.printSchema()
 
     transforms.write().overwrite().save((Path(output_path) / "pipeline").as_posix())
