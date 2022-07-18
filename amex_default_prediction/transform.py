@@ -97,7 +97,7 @@ class PrepareDatasetTransformer(
                 .alias("most_recent"),
                 *[F.col(c).cast("float").alias(c) for c in self.getNumericalCols()],
                 *self.getCategoricalCols(),
-                (F.crc32("customer_ID") % 32).alias("sample_id"),
+                (F.crc32("customer_ID") % 100).alias("sample_id"),
             )
         )
 

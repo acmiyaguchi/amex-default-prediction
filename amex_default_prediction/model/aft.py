@@ -5,7 +5,7 @@ from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.feature import SQLTransformer, VectorSlicer
 from pyspark.ml.regression import AFTSurvivalRegression
-from pyspark.ml.tuning import ParamGridBuilder
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 
 from amex_default_prediction.utils import spark_session
 
@@ -22,11 +22,20 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
     train_data_pipeline = PipelineModel.read().load(
         (Path(train_data_preprocessed_path) / "pipeline").as_posix()
     )
+    # get the last stage with the vector assembler in it
+    assembler_index = [
+        i
+        for i, x in enumerate(train_data_pipeline.stages)
+        if "VectorAssembler" in x.__class__.__name__
+    ][-1]
     params = {
-        k.name: v for k, v in train_data_pipeline.stages[-1].extractParamMap().items()
+        k.name: v
+        for k, v in train_data_pipeline.stages[assembler_index]
+        .extractParamMap()
+        .items()
     }
-    age_col_idx = [i for i, v in enumerate(params["inputCols"]) if v == "age"][0]
-    cols_except_age = [i for i, v in enumerate(params["inputCols"]) if v != "age"]
+    age_col_idx = [i for i, v in enumerate(params["inputCols"]) if v == "age_days"][0]
+    cols_except_age = [i for i, v in enumerate(params["inputCols"]) if v != "age_days"]
 
     model = AFTSurvivalRegression(
         featuresCol="features_except_age",
@@ -35,36 +44,43 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
         quantilesCol="quantiles_probability",
     )
     grid = ParamGridBuilder().addGrid(model.aggregationDepth, [2]).build()
+    evaluator = RegressionEvaluator()
     fit_generic(
         spark,
-        Pipeline(
-            stages=[
-                VectorSlicer(
-                    inputCol="features",
-                    indices=cols_except_age,
-                    outputCol="features_except_age",
-                ),
-                ExtractVectorIndexTransformer(
-                    inputCol="features", outputCol="age", indexCol=age_col_idx
-                ),
-                # create the censor column, using the label column. If the is a
-                # default event, it means our data has not been censored
-                SQLTransformer(
-                    statement="""
+        CrossValidator(
+            estimator=Pipeline(
+                stages=[
+                    VectorSlicer(
+                        inputCol="features",
+                        indices=cols_except_age,
+                        outputCol="features_except_age",
+                    ),
+                    ExtractVectorIndexTransformer(
+                        inputCol="features", outputCol="age", indexCol=age_col_idx
+                    ),
+                    # create the censor column, using the label column. If the is a
+                    # default event, it means our data has not been censored
+                    SQLTransformer(
+                        statement="""
                         SELECT
                             *,
                             label as censor,
                             age + 1 as age_plus_one
                         FROM __THIS__
                     """
-                ),
-                model,
-            ]
+                    ),
+                    model,
+                ]
+            ),
+            estimatorParamMaps=grid,
+            evaluator=evaluator,
+            parallelism=parallelism,
         ),
-        grid,
-        RegressionEvaluator(),
+        evaluator,
         train_data_preprocessed_path,
         output_path,
-        train_ratio,
-        parallelism,
+        train_ratio=train_ratio,
+        train_most_recent_only=False,
+        validation_most_recent_only=True,
+        data_most_recent_only=True,
     )

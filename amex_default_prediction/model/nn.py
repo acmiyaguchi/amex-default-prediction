@@ -78,6 +78,6 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
         AmexMetricEvaluator(predictionCol="predictions", labelCol="label"),
         train_data_preprocessed_path,
         output_path,
-        train_ratio,
         read_func=read_func,
+        train_ratio=train_ratio,
     )

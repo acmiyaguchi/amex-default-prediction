@@ -29,8 +29,8 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism):
         grid,
         train_data_preprocessed_path,
         output_path,
-        train_ratio,
-        parallelism,
+        train_ratio=train_ratio,
+        parallelism=parallelism,
     )
 
 
@@ -60,6 +60,6 @@ def fit_with_aft(
         train_data_preprocessed_path,
         aft_model_path,
         output_path,
-        train_ratio,
-        parallelism,
+        train_ratio=train_ratio,
+        parallelism=parallelism,
     )

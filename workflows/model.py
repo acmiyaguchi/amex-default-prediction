@@ -23,12 +23,12 @@ def main(model_name):
             [
                 "fit",
                 model_name,
-                (intermediate_root / "train_data_preprocessed").as_posix(),
+                (intermediate_root / "train_data_preprocessed_v2").as_posix(),
                 *(
                     [
                         (
                             intermediate_root
-                            / "models/aft/20220711044610-0.8.0-6bbdfec"
+                            / "models/aft/20220718061207-0.12.0-2d69426"
                         ).as_posix()
                     ]
                     if "with-aft" in model_name

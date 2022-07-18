@@ -70,17 +70,28 @@ class ExtractVectorIndexTransformer(
         )
 
 
-def read_train_data(spark, train_data_preprocessed_path, train_ratio):
-    data = (
-        spark.read.parquet((Path(train_data_preprocessed_path) / "data").as_posix())
-        .withColumn("label", F.col("target").cast("float"))
-        .withColumn("sample_id", F.crc32("customer_ID") % 100)
-        .cache()
-    )
-    train_data = data.where(f"sample_id < {train_ratio*100}")
+def read_train_data(
+    spark,
+    train_data_preprocessed_path,
+    train_ratio=0.8,
+    data_most_recent_only=True,
+    train_most_recent_only=True,
+    validation_most_recent_only=True,
+):
+    data = spark.read.parquet(
+        (Path(train_data_preprocessed_path) / "data").as_posix()
+    ).cache()
 
-    # some debugging information
+    train_data = data.where(f"sample_id < {train_ratio*100}")
     validation_data = data.where(f"sample_id >= {train_ratio*100}")
+    if train_most_recent_only:
+        train_data = train_data.where("most_recent")
+    if validation_most_recent_only:
+        validation_data = validation_data.where("most_recent")
+    if data_most_recent_only:
+        data = data.where("most_recent")
+
+    # debugging information
     train_count = train_data.select(
         F.count("*").alias("total"), F.sum("label").alias("positive")
     ).collect()[0]
@@ -104,13 +115,32 @@ def fit_generic(
     evaluator,
     train_data_preprocessed_path,
     output_path,
-    train_ratio=0.8,
     read_func=read_train_data,
+    train_ratio=0.8,
+    data_most_recent_only=True,
+    train_most_recent_only=True,
+    validation_most_recent_only=True,
 ):
     """Fit function that can be used with a variety of models for quick
-    iteration. Assumes that preprocessing has already been done."""
+    iteration. Assumes that preprocessing has already been done.
+
+    :param spark: SparkSession
+    :param model: Estimator
+    :param evaluator: Evaluator
+    :param train_data_preprocessed_path: Path to preprocessed training data
+    :param output_path: Path to save model
+    :param train_ratio: Ratio of training data to use
+    :param read_func: Function to read data (path, ratio) -> (data, train, validation)
+    :param train_most_recent_only: If True, only use the most recent training data
+    :param validation_most_recent_only: If True, only use the most recent validation data
+    """
     data, train_data, validation_data = read_func(
-        spark, train_data_preprocessed_path, train_ratio
+        spark,
+        train_data_preprocessed_path,
+        train_ratio,
+        data_most_recent_only,
+        train_most_recent_only,
+        validation_most_recent_only,
     )
 
     fit_model = model.fit(train_data)
@@ -132,9 +162,8 @@ def fit_simple(
     grid,
     train_data_preprocessed_path,
     output_path,
-    train_ratio=0.8,
     parallelism=4,
-    read_func=read_train_data,
+    **kwargs,
 ):
     """Fit function that handles binary prediction using the Amex metric"""
     evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
@@ -156,8 +185,7 @@ def fit_simple(
         evaluator,
         train_data_preprocessed_path,
         output_path,
-        train_ratio,
-        read_func,
+        **kwargs,
     )
 
 
@@ -168,9 +196,8 @@ def fit_simple_with_aft(
     train_data_preprocessed_path,
     aft_model_path,
     output_path,
-    train_ratio=0.8,
     parallelism=4,
-    read_func=read_train_data,
+    **kwargs,
 ):
     aft_model = CrossValidatorModel.read().load(aft_model_path)
     evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
@@ -207,6 +234,5 @@ def fit_simple_with_aft(
         evaluator,
         train_data_preprocessed_path,
         output_path,
-        train_ratio,
-        read_func,
+        **kwargs,
     )
