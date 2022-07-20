@@ -18,6 +18,7 @@ setuptools.setup(
         "pyspark",
         "torch",
         "sparktorch",
+        "petastorm[torch]",
         "pytorch-lightning",
         "torch-summary",
         'importlib-metadata>=0.12;python_version<"3.8"',
