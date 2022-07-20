@@ -23,6 +23,11 @@ def data_path():
 
 
 @pytest.fixture
+def cache_path():
+    return Path(__file__).parent.parent / "data/tmp/pytest"
+
+
+@pytest.fixture
 def synthetic_train_data_path(spark, tmp_path):
     num_rows = 20
     num_features = 3

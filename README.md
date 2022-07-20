@@ -43,3 +43,4 @@ and error has lead to a few developments...
 - https://stackoverflow.com/questions/37270446/how-to-create-a-custom-estimator-in-pyspark
 - https://stackoverflow.com/questions/18204782/runtimeerror-on-windows-trying-python-multiprocessing
 - https://github.com/pytorch/pytorch/issues/25767
+- https://github.com/Lightning-AI/lightning/issues/1586
