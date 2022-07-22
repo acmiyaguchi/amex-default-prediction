@@ -7,6 +7,7 @@ import pytest
 from pyspark.ml.functions import array_to_vector
 from pyspark.sql import functions as F
 
+from amex_default_prediction.torch.data_module import transform_vector_to_array
 from amex_default_prediction.utils import spark_session
 
 
@@ -28,7 +29,7 @@ def cache_path():
 
 
 @pytest.fixture
-def synthetic_train_data_path(spark, tmp_path):
+def synthetic_train_df(spark):
     num_rows = 20
     num_features = 3
     pdf = pd.DataFrame(
@@ -46,7 +47,23 @@ def synthetic_train_data_path(spark, tmp_path):
         .repartition(1)
     )
     df.printSchema()
+    return df
+
+
+@pytest.fixture
+def synthetic_train_data_path(synthetic_train_df, tmp_path):
+    df = synthetic_train_df
     # our training procedure dumps out a data and pipeline directory
     output = tmp_path / "test_data"
     df.write.parquet((output / "data").as_posix())
+    yield output
+
+
+@pytest.fixture
+def synthetic_train_data_torch_path(synthetic_train_df, tmp_path):
+    df = synthetic_train_df
+    output = tmp_path / "test_data"
+    transform_vector_to_array(df, partitions=4).write.parquet(
+        (output / "data").as_posix()
+    )
     yield output
