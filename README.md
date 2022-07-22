@@ -27,7 +27,8 @@ I spent 6 hours or so trying to use sparktorch on my local machine. Much trial
 and error has lead to a few developments...
 
 I configured pytorch lightning and petastorm using the v2 dataset. It seems to
-run at around 60-70 it/s, which seems to be fairly slow.
+run at around 60-70 it/s, which seems to be fairly slow. I'll try loading the
+data directly from parquet, otherwise just suffer with the slow epochs.
 
 ### resource
 

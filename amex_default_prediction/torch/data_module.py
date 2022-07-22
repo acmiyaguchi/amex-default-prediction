@@ -9,6 +9,16 @@ from pyspark.sql import functions as F
 from amex_default_prediction.model.base import read_train_data
 
 
+def transform_vector_to_array(df, partitions=32):
+    """Cast the features and labels fields from the v2 transformed dataset to
+    align with the expectations of torch."""
+    return (
+        df.withColumn("features", vector_to_array("features").cast("array<float>"))
+        .withColumn("label", F.col("label").cast("long"))
+        .repartition(partitions)
+    )
+
+
 class PetastormDataModule(pl.LightningDataModule):
     def __init__(
         self,
@@ -35,15 +45,13 @@ class PetastormDataModule(pl.LightningDataModule):
             self.train_ratio,
         )
 
-        def transform_df(df):
-            return df.select(
-                vector_to_array("features").cast("array<float>").alias("features"),
-                F.col("label").cast("long"),
-            ).repartition(32)
-
         self.input_size = val_df.head().features.size
-        self.converter_train = make_spark_converter(transform_df(train_df))
-        self.converter_val = make_spark_converter(transform_df(val_df))
+        self.converter_train = make_spark_converter(
+            transform_vector_to_array(train_df).select("features", "label")
+        )
+        self.converter_val = make_spark_converter(
+            transform_vector_to_array(val_df).select("features", "label")
+        )
 
     def train_dataloader(self):
         with self.converter_train.make_torch_dataloader(
