@@ -63,7 +63,5 @@ def synthetic_train_data_path(synthetic_train_df, tmp_path):
 def synthetic_train_data_torch_path(synthetic_train_df, tmp_path):
     df = synthetic_train_df
     output = tmp_path / "test_data"
-    transform_vector_to_array(df, partitions=4).write.parquet(
-        (output / "data").as_posix()
-    )
+    transform_vector_to_array(df, partitions=4).write.parquet(output.as_posix())
     yield output
