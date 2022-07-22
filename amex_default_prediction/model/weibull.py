@@ -1,3 +1,4 @@
+from ast import In
 from pathlib import Path
 
 import click
@@ -8,6 +9,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
 from pyspark.ml.functions import vector_to_array
+from pyspark.sql import functions as sparkF
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
 
 from amex_default_prediction.utils import spark_session
 
@@ -30,8 +35,10 @@ class Net(pl.LightningModule):
     def forward(self, x):
         return self.network(x)
 
-    def configure_optimizer(self):
-        return torch.optim.Adam(self.parameters, lr=1e-3)
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+        return [optimizer], [lr_scheduler]
 
     def _step(self, batch, *args, **kwargs):
         x, y = batch["features"], batch["label"]
@@ -39,10 +46,14 @@ class Net(pl.LightningModule):
         return F.cross_entropy(z, y)
 
     def training_step(self, train_batch, batch_idx):
-        self._step(train_batch)
+        loss = self._step(train_batch)
+        self.log("loss", loss)
+        return loss
 
     def validation_step(self, val_batch, batch_id):
-        self._step(val_batch)
+        loss = self._step(val_batch)
+        self.log("val_loss", loss)
+        return loss
 
 
 class AmexDataModule(pl.LightningDataModule):
@@ -64,7 +75,11 @@ class AmexDataModule(pl.LightningDataModule):
         )
 
         def transform_df(df):
-            return df.select(vector_to_array("features").alias("features"), "label")
+            F = sparkF
+            return df.select(
+                vector_to_array("features").cast("array<float>").alias("features"),
+                F.col("label").cast("long"),
+            ).repartition(32)
 
         self.input_size = val_df.head().features.size
         self.converter_train = make_spark_converter(transform_df(train_df))
@@ -72,11 +87,13 @@ class AmexDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         with self.converter_train.make_torch_dataloader() as loader:
-            yield loader
+            for batch in loader:
+                yield batch
 
     def val_dataloader(self):
         with self.converter_val.make_torch_dataloader() as loader:
-            yield loader
+            for batch in loader:
+                yield batch
 
 
 @click.command()
@@ -84,7 +101,7 @@ class AmexDataModule(pl.LightningDataModule):
 @click.argument("output_path", type=click.Path())
 @click.option("--train-ratio", default=0.8, type=float)
 @click.option("--parallelism", default=1, type=int)
-@click.option("--cache-dir", default="data/tmp/spark")
+@click.option("--cache-dir", default="file:///tmp")
 def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism, cache_dir):
     spark = spark_session()
 
@@ -98,5 +115,14 @@ def fit(train_data_preprocessed_path, output_path, train_ratio, parallelism, cac
         spark, cache_dir, train_data_preprocessed_path, train_ratio
     )
 
-    trainer = pl.Trainer()
+    trainer = pl.Trainer(
+        gpus=-1,
+        default_root_dir=output_path,
+        detect_anomaly=True,
+        logger=TensorBoardLogger(output_path, log_graph=True),
+        callbacks=[
+            EarlyStopping(monitor="val_loss", mode="min"),
+            ModelCheckpoint(monitor="val_loss", auto_insert_metric_name=True),
+        ],
+    )
     trainer.fit(model, data_module)

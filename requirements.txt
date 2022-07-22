@@ -4,7 +4,7 @@
 #
 #    pip-compile
 #
---find-links https://download.pytorch.org/whl/cu113
+--find-links https://download.pytorch.org/whl/cu113/torch_stable.html
 
 -e file:./
     # via -r requirements.in
@@ -365,7 +365,6 @@ requests==2.28.1
     #   requests-oauthlib
     #   sparktorch
     #   tensorboard
-    #   torchvision
 requests-oauthlib==1.3.1
     # via google-auth-oauthlib
 rsa==4.8
@@ -409,8 +408,9 @@ tomli==2.0.1
     # via
     #   black
     #   pytest
-torch==1.12.0
+torch==1.10.2+cu113
     # via
+    #   -r requirements.in
     #   amex-default-prediction
     #   petastorm
     #   pytorch-lightning
@@ -421,8 +421,10 @@ torch-summary==1.4.5
     # via amex-default-prediction
 torchmetrics==0.9.2
     # via pytorch-lightning
-torchvision==0.13.0
-    # via petastorm
+torchvision==0.11.3+cu113
+    # via
+    #   -r requirements.in
+    #   petastorm
 tornado==6.2
     # via
     #   ipykernel
@@ -452,7 +454,6 @@ typing-extensions==4.3.0
     #   black
     #   pytorch-lightning
     #   torch
-    #   torchvision
 urllib3==1.26.10
     # via requests
 virtualenv==20.15.1

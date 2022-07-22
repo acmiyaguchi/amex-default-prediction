@@ -1,6 +1,6 @@
 import click
 
-from .model import aft, gbt, logistic, nn
+from .model import aft, gbt, logistic, nn, weibull
 from .transform import transform_group
 
 
@@ -20,6 +20,8 @@ fit.add_command(aft.fit, "aft")
 fit.add_command(logistic.fit_with_aft, "logistic-with-aft")
 fit.add_command(gbt.fit_with_aft, "gbt-with-aft")
 fit.add_command(nn.fit, "nn")
+fit.add_command(weibull.fit, "weibull")
+
 
 for command in [transform_group, fit]:
     cli.add_command(command)
