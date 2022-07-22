@@ -16,7 +16,10 @@ from .net import StrawmanNet
 @click.argument("output_path", type=click.Path())
 @click.option("--train-ratio", default=0.8, type=float)
 @click.option("--cache-dir", default="file:///tmp")
-def fit_strawman(train_data_preprocessed_path, output_path, train_ratio, cache_dir):
+@click.option("--batch-size", default=512, type=int)
+def fit_strawman(
+    train_data_preprocessed_path, output_path, train_ratio, cache_dir, batch_size
+):
     spark = spark_session()
 
     # get the input size for the model
@@ -26,7 +29,11 @@ def fit_strawman(train_data_preprocessed_path, output_path, train_ratio, cache_d
     print(model)
 
     data_module = PetastormDataModule(
-        spark, cache_dir, train_data_preprocessed_path, train_ratio
+        spark,
+        cache_dir,
+        train_data_preprocessed_path,
+        train_ratio=train_ratio,
+        batch_size=batch_size,
     )
 
     trainer = pl.Trainer(

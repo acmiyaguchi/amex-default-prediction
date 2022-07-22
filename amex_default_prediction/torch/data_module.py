@@ -10,7 +10,14 @@ from amex_default_prediction.model.base import read_train_data
 
 
 class PetastormDataModule(pl.LightningDataModule):
-    def __init__(self, spark, cache_dir, train_data_preprocessed_path, train_ratio=0.8):
+    def __init__(
+        self,
+        spark,
+        cache_dir,
+        train_data_preprocessed_path,
+        train_ratio=0.8,
+        batch_size=32,
+    ):
         super().__init__()
         spark.conf.set(
             SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, Path(cache_dir).as_posix()
@@ -18,6 +25,7 @@ class PetastormDataModule(pl.LightningDataModule):
         self.spark = spark
         self.train_data_preprocessed_path = train_data_preprocessed_path
         self.train_ratio = train_ratio
+        self.batch_size = batch_size
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
@@ -38,11 +46,15 @@ class PetastormDataModule(pl.LightningDataModule):
         self.converter_val = make_spark_converter(transform_df(val_df))
 
     def train_dataloader(self):
-        with self.converter_train.make_torch_dataloader() as loader:
+        with self.converter_train.make_torch_dataloader(
+            batch_size=self.batch_size
+        ) as loader:
             for batch in loader:
                 yield batch
 
     def val_dataloader(self):
-        with self.converter_val.make_torch_dataloader() as loader:
+        with self.converter_val.make_torch_dataloader(
+            batch_size=self.batch_size
+        ) as loader:
             for batch in loader:
                 yield batch

@@ -26,6 +26,9 @@ python -m workflow.model logistic  # and others
 I spent 6 hours or so trying to use sparktorch on my local machine. Much trial
 and error has lead to a few developments...
 
+I configured pytorch lightning and petastorm using the v2 dataset. It seems to
+run at around 60-70 it/s, which seems to be fairly slow.
+
 ### resource
 
 - https://www.markhneedham.com/blog/2017/03/25/luigi-externalprogramtask-example-converting-json-csv/
