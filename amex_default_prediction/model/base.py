@@ -146,12 +146,13 @@ def fit_generic(
 
     fit_model = model.fit(train_data)
 
-    train_eval = evaluator.evaluate(fit_model.transform(train_data))
-    validation_eval = evaluator.evaluate(fit_model.transform(validation_data))
-    total_eval = evaluator.evaluate(fit_model.transform(data))
-    print(f"train eval: {train_eval}")
-    print(f"validation eval: {validation_eval}")
-    print(f"total eval: {total_eval}")
+    if evaluator:
+        train_eval = evaluator.evaluate(fit_model.transform(train_data))
+        validation_eval = evaluator.evaluate(fit_model.transform(validation_data))
+        total_eval = evaluator.evaluate(fit_model.transform(data))
+        print(f"train eval: {train_eval}")
+        print(f"validation eval: {validation_eval}")
+        print(f"total eval: {total_eval}")
 
     fit_model.write().overwrite().save(Path(output_path).as_posix())
     print(f"wrote to {output_path}")
