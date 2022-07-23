@@ -1,8 +1,10 @@
 from pathlib import Path
 
-from pyspark.ml import Pipeline
+import numpy as np
+import pandas as pd
+from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.feature import SQLTransformer, VectorAssembler
-from pyspark.ml.functions import vector_to_array
+from pyspark.ml.functions import array_to_vector, vector_to_array
 from pyspark.ml.param.shared import (
     HasInputCol,
     HasOutputCol,
@@ -70,6 +72,28 @@ class ExtractVectorIndexTransformer(
         )
 
 
+class LogFeatureTransformer(
+    Transformer,
+    HasInputCol,
+    HasOutputCol,
+    DefaultParamsWritable,
+    DefaultParamsReadable,
+):
+    def __init__(self, inputCol="features", outputCol="features_log"):
+        super().__init__()
+        self._setDefault(inputCol=inputCol, outputCol=outputCol)
+
+    def _transform(self, dataset):
+        @F.pandas_udf("array<double>")
+        def log_features(features):
+            return features.apply(lambda x: np.log(x + 1.0))
+
+        return dataset.withColumn(
+            self.getOutputCol(),
+            array_to_vector(log_features(vector_to_array(self.getInputCol()))),
+        )
+
+
 def read_train_data(
     spark,
     train_data_preprocessed_path,
@@ -93,19 +117,22 @@ def read_train_data(
         data = data.where("most_recent")
 
     # debugging information
-    train_count = train_data.select(
-        F.count("*").alias("total"), F.sum("label").alias("positive")
-    ).collect()[0]
-    validation_count = validation_data.select(
-        F.count("*").alias("total"), F.sum("label").alias("positive")
-    ).collect()[0]
+    if "label" in data.columns:
+        train_count = train_data.select(
+            F.count("*").alias("total"), F.sum("label").alias("positive")
+        ).collect()[0]
+        validation_count = validation_data.select(
+            F.count("*").alias("total"), F.sum("label").alias("positive")
+        ).collect()[0]
 
-    print(f"training ratio: {train_ratio}")
-    print(f"train_count: {train_count.total}, positive: {train_count.positive}")
-    print(
-        f"validation_count: {validation_count.total}, "
-        f"positive: {validation_count.positive}"
-    )
+        print(f"training ratio: {train_ratio}")
+        print(f"train_count: {train_count.total}, positive: {train_count.positive}")
+        print(
+            f"validation_count: {validation_count.total}, "
+            f"positive: {validation_count.positive}"
+        )
+    else:
+        print("total count: ", data.count())
 
     return data, train_data, validation_data
 
@@ -146,12 +173,13 @@ def fit_generic(
 
     fit_model = model.fit(train_data)
 
-    train_eval = evaluator.evaluate(fit_model.transform(train_data))
-    validation_eval = evaluator.evaluate(fit_model.transform(validation_data))
-    total_eval = evaluator.evaluate(fit_model.transform(data))
-    print(f"train eval: {train_eval}")
-    print(f"validation eval: {validation_eval}")
-    print(f"total eval: {total_eval}")
+    if evaluator:
+        train_eval = evaluator.evaluate(fit_model.transform(train_data))
+        validation_eval = evaluator.evaluate(fit_model.transform(validation_data))
+        total_eval = evaluator.evaluate(fit_model.transform(data))
+        print(f"train eval: {train_eval}")
+        print(f"validation eval: {validation_eval}")
+        print(f"total eval: {total_eval}")
 
     fit_model.write().overwrite().save(Path(output_path).as_posix())
     print(f"wrote to {output_path}")
@@ -218,6 +246,50 @@ def fit_simple_with_aft(
                         SELECT
                             customer_ID,
                             features_with_aft as features,
+                            label
+                        FROM __THIS__
+                    """
+                    ),
+                    model,
+                    ExtractVectorIndexTransformer(
+                        inputCol="probability", outputCol="pred", indexCol=1
+                    ),
+                ]
+            ),
+            estimatorParamMaps=grid,
+            evaluator=evaluator,
+            parallelism=parallelism,
+        ),
+        evaluator,
+        train_data_preprocessed_path,
+        output_path,
+        **kwargs,
+    )
+
+
+def fit_simple_with_pca(
+    spark,
+    model,
+    grid,
+    train_data_preprocessed_path,
+    pca_model_path,
+    output_path,
+    parallelism=4,
+    **kwargs,
+):
+    pca_model = PipelineModel.read().load(pca_model_path)
+    evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
+    fit_generic(
+        spark,
+        CrossValidator(
+            estimator=Pipeline(
+                stages=[
+                    pca_model,
+                    SQLTransformer(
+                        statement="""
+                        SELECT
+                            customer_ID,
+                            features_pca as features,
                             label
                         FROM __THIS__
                     """

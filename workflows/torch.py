@@ -6,7 +6,7 @@ from .utils import build_wheel, run_spark, unique_name
 
 
 @click.command()
-@click.argument("model_name", type=click.Choice(["torch-strawman"]))
+@click.argument("model_name", type=str)
 def main(model_name):
     data_root = Path("data")
     intermediate_root = data_root / "intermediate"

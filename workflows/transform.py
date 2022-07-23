@@ -20,27 +20,28 @@ def main(overwrite):
             print_only=print_only,
         )
 
-    output = intermediate_root / "train_data_preprocessed_v2"
+    output = intermediate_root / "test_data_preprocessed_v2"
     run_spark(
         " ".join(
             [
                 "transform",
-                "preprocess-training-dataset",
-                (intermediate_root / "train_data").as_posix(),
-                (intermediate_root / "train_labels").as_posix(),
+                "preprocess-testing-dataset",
+                (intermediate_root / "test_data").as_posix(),
                 output.as_posix(),
             ]
         ),
         print_only=output.exists() and not overwrite,
     )
 
-    output = intermediate_root / "train_data_preprocessed_torch_v2"
+    output = intermediate_root / "train_data_preprocessed_v3"
     run_spark(
         " ".join(
             [
                 "transform",
-                "vector-to-array",
-                (intermediate_root / "train_data_preprocessed_v2" / "data").as_posix(),
+                "preprocess-training-dataset-with-pipeline",
+                (intermediate_root / "test_data_preprocessed_v2").as_posix(),
+                (intermediate_root / "train_data").as_posix(),
+                (intermediate_root / "train_labels").as_posix(),
                 output.as_posix(),
             ]
         ),

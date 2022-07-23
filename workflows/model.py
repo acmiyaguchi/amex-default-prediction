@@ -6,12 +6,7 @@ from .utils import build_wheel, run_spark, unique_name
 
 
 @click.command()
-@click.argument(
-    "model_name",
-    type=click.Choice(
-        ["logistic", "gbt", "aft", "logistic-with-aft", "gbt-with-aft", "nn"]
-    ),
-)
+@click.argument("model_name", type=str)
 def main(model_name):
     data_root = Path("data")
     intermediate_root = data_root / "intermediate"
@@ -23,7 +18,14 @@ def main(model_name):
             [
                 "fit",
                 model_name,
-                (intermediate_root / "train_data_preprocessed_v2").as_posix(),
+                (
+                    intermediate_root
+                    / (
+                        "test_data_preprocessed_v2"
+                        if model_name == "pca"
+                        else "train_data_preprocessed_v3"
+                    )
+                ).as_posix(),
                 *(
                     [
                         (
@@ -32,6 +34,16 @@ def main(model_name):
                         ).as_posix()
                     ]
                     if "with-aft" in model_name
+                    else []
+                ),
+                *(
+                    [
+                        (
+                            intermediate_root
+                            / "models/pca/20220723073653-0.15.2-c5aeb38"
+                        ).as_posix()
+                    ]
+                    if "with-pca" in model_name
                     else []
                 ),
                 output.as_posix(),
