@@ -10,7 +10,7 @@ from .base import fit_generic
 @click.command()
 @click.argument("train_data_preprocessed_path", type=click.Path(exists=True))
 @click.argument("output_path", type=click.Path())
-@click.option("--train-ratio", default=0.8, type=float)
+@click.option("--train-ratio", default=1.0, type=float)
 def fit(train_data_preprocessed_path, output_path, train_ratio):
     spark = spark_session()
     fit_generic(
@@ -23,7 +23,7 @@ def fit(train_data_preprocessed_path, output_path, train_ratio):
                     withScaling=True,
                     withCentering=True,
                 ),
-                PCA(k=64, inputCol="features_scaled", outputCol="features_pca"),
+                PCA(k=32, inputCol="features_scaled", outputCol="features_pca"),
             ]
         ),
         None,

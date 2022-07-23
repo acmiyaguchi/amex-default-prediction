@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.feature import SQLTransformer, VectorAssembler
 from pyspark.ml.functions import vector_to_array
 from pyspark.ml.param.shared import (
@@ -93,19 +93,22 @@ def read_train_data(
         data = data.where("most_recent")
 
     # debugging information
-    train_count = train_data.select(
-        F.count("*").alias("total"), F.sum("label").alias("positive")
-    ).collect()[0]
-    validation_count = validation_data.select(
-        F.count("*").alias("total"), F.sum("label").alias("positive")
-    ).collect()[0]
+    if "label" in data.columns:
+        train_count = train_data.select(
+            F.count("*").alias("total"), F.sum("label").alias("positive")
+        ).collect()[0]
+        validation_count = validation_data.select(
+            F.count("*").alias("total"), F.sum("label").alias("positive")
+        ).collect()[0]
 
-    print(f"training ratio: {train_ratio}")
-    print(f"train_count: {train_count.total}, positive: {train_count.positive}")
-    print(
-        f"validation_count: {validation_count.total}, "
-        f"positive: {validation_count.positive}"
-    )
+        print(f"training ratio: {train_ratio}")
+        print(f"train_count: {train_count.total}, positive: {train_count.positive}")
+        print(
+            f"validation_count: {validation_count.total}, "
+            f"positive: {validation_count.positive}"
+        )
+    else:
+        print("total count: ", data.count())
 
     return data, train_data, validation_data
 
@@ -219,6 +222,50 @@ def fit_simple_with_aft(
                         SELECT
                             customer_ID,
                             features_with_aft as features,
+                            label
+                        FROM __THIS__
+                    """
+                    ),
+                    model,
+                    ExtractVectorIndexTransformer(
+                        inputCol="probability", outputCol="pred", indexCol=1
+                    ),
+                ]
+            ),
+            estimatorParamMaps=grid,
+            evaluator=evaluator,
+            parallelism=parallelism,
+        ),
+        evaluator,
+        train_data_preprocessed_path,
+        output_path,
+        **kwargs,
+    )
+
+
+def fit_simple_with_pca(
+    spark,
+    model,
+    grid,
+    train_data_preprocessed_path,
+    pca_model_path,
+    output_path,
+    parallelism=4,
+    **kwargs,
+):
+    pca_model = PipelineModel.read().load(pca_model_path)
+    evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
+    fit_generic(
+        spark,
+        CrossValidator(
+            estimator=Pipeline(
+                stages=[
+                    pca_model,
+                    SQLTransformer(
+                        statement="""
+                        SELECT
+                            customer_ID,
+                            features_pca as features,
                             label
                         FROM __THIS__
                     """

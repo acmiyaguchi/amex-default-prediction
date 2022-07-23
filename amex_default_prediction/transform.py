@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import click
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.feature import (
     Imputer,
     OneHotEncoder,
@@ -104,24 +104,20 @@ class PrepareDatasetTransformer(
         )
 
 
-@transform_group.command()
-@click.argument("train_data_path", type=click.Path(exists=True))
-@click.argument("train_labels_path", type=click.Path(exists=True))
-@click.argument("output_path", type=click.Path())
-@click.option(
-    "--drop-columns", type=str, help="comma-delimited list of columns to drop"
-)
-@click.option("--limit", default=None, type=int)
-def preprocess_training_dataset(
-    train_data_path, train_labels_path, output_path, drop_columns, limit
+def preprocess_dataset(
+    train_data_path, train_labels_path, output_path, drop_columns=None, limit=None
 ):
     spark = spark_session()
     train_data = spark.read.parquet(train_data_path)
     if limit:
         train_data = train_data.limit(limit)
-    train_labels = spark.read.parquet(train_labels_path).select(
-        "customer_ID", F.col("target").cast("float").alias("label")
-    )
+
+    if train_labels_path:
+        train_labels = spark.read.parquet(train_labels_path).select(
+            "customer_ID", F.col("target").cast("float").alias("label")
+        )
+    else:
+        print("no labels provided")
 
     drop_columns = (
         [col.strip() for col in drop_columns.split(",")] if drop_columns else []
@@ -197,17 +193,94 @@ def preprocess_training_dataset(
     # ensure that all of our columns are actually floating point values
     transforms = pipeline.fit(train_data)
 
-    df = (
-        transforms.transform(train_data).join(train_labels, on="customer_ID")
-        # only return the label/default event on the most recent row of data
-        .withColumn(
-            "label", F.when(F.col("most_recent"), F.col("label")).otherwise(F.lit(0.0))
+    df = transforms.transform(train_data)
+    if train_labels_path:
+        df = (
+            df.join(train_labels, on="customer_ID")
+            # only return the label/default event on the most recent row of data
+            .withColumn(
+                "label",
+                F.when(F.col("most_recent"), F.col("label")).otherwise(F.lit(0.0)),
+            )
         )
-    )
-    df.printSchema()
 
+    df.printSchema()
     transforms.write().overwrite().save((Path(output_path) / "pipeline").as_posix())
     df.write.parquet((Path(output_path) / "data").as_posix(), mode="overwrite")
+
+
+def preprocess_dataset_with_existing_pipeline(
+    pipeline, train_data_path, train_labels_path, output_path, limit=None
+):
+    """Process the training dataset with the testing pipeline.
+
+    This is a variant of the above function, which could be used on the testing
+    or training independently. We reuse the pipeline to transform all the
+    features.
+    """
+    spark = spark_session()
+    train_data = spark.read.parquet(train_data_path)
+    if limit:
+        train_data = train_data.limit(limit)
+
+    train_labels = spark.read.parquet(train_labels_path).select(
+        "customer_ID", F.col("target").cast("float").alias("label")
+    )
+
+    df = (
+        pipeline.transform(train_data).join(train_labels, on="customer_ID")
+        # only return the label/default event on the most recent row of data
+        .withColumn(
+            "label",
+            F.when(F.col("most_recent"), F.col("label")).otherwise(F.lit(0.0)),
+        )
+    )
+
+    df.printSchema()
+    pipeline.write().overwrite().save((Path(output_path) / "pipeline").as_posix())
+    df.write.parquet((Path(output_path) / "data").as_posix(), mode="overwrite")
+
+
+@transform_group.command()
+@click.argument("train_data_path", type=click.Path(exists=True))
+@click.argument("output_path", type=click.Path())
+@click.option(
+    "--drop-columns", type=str, help="comma-delimited list of columns to drop"
+)
+@click.option("--limit", default=None, type=int)
+def preprocess_testing_dataset(train_data_path, output_path, drop_columns, limit):
+    preprocess_dataset(train_data_path, None, output_path, drop_columns, limit)
+
+
+@transform_group.command()
+@click.argument("train_data_path", type=click.Path(exists=True))
+@click.argument("train_labels_path", type=click.Path(exists=True))
+@click.argument("output_path", type=click.Path())
+@click.option(
+    "--drop-columns", type=str, help="comma-delimited list of columns to drop"
+)
+@click.option("--limit", default=None, type=int)
+def preprocess_training_dataset(
+    train_data_path, train_labels_path, output_path, drop_columns, limit
+):
+    preprocess_dataset(
+        train_data_path, train_labels_path, output_path, drop_columns, limit
+    )
+
+
+@transform_group.command()
+@click.argument("preprocessed_path", type=click.Path(exists=True))
+@click.argument("train_data_path", type=click.Path(exists=True))
+@click.argument("train_labels_path", type=click.Path(exists=True))
+@click.argument("output_path", type=click.Path())
+@click.option("--limit", default=None, type=int)
+def preprocess_training_dataset_with_pipeline(
+    preprocessed_path, train_data_path, train_labels_path, output_path, limit
+):
+    pipeline = PipelineModel.load((Path(preprocessed_path) / "pipeline").as_posix())
+    preprocess_dataset_with_existing_pipeline(
+        pipeline, train_data_path, train_labels_path, output_path, limit
+    )
 
 
 @transform_group.command()
