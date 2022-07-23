@@ -4,7 +4,7 @@ from pyspark.ml.feature import PCA, Imputer, MinMaxScaler, RobustScaler, Standar
 
 from amex_default_prediction.utils import spark_session
 
-from .base import LogFeatureTransformer, fit_generic
+from .base import fit_generic
 
 
 @click.command()
@@ -17,17 +17,13 @@ def fit(train_data_preprocessed_path, output_path, train_ratio):
         spark,
         Pipeline(
             stages=[
-                MinMaxScaler(inputCol="features", outputCol="features_minmax"),
-                LogFeatureTransformer(
-                    inputCol="features_minmax", outputCol="features_log"
-                ),
                 StandardScaler(
-                    inputCol="features_log",
+                    inputCol="features",
                     outputCol="features_scaled",
                     withStd=True,
                     withMean=True,
                 ),
-                PCA(k=64, inputCol="features_scaled", outputCol="features_pca"),
+                PCA(k=128, inputCol="features_scaled", outputCol="features_pca"),
             ]
         ),
         None,

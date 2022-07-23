@@ -22,7 +22,8 @@ def plot_pca(model_path, train_data_preprocessed_path):
     model = PipelineModel.read().load(model_path)
 
     var = model.stages[-1].explainedVariance
-    print(var)
+    print(np.array(var))
+    print(var.cumsum())
     plt.title("scree plot")
     plt.plot(np.log(var))
     plt.show()
@@ -40,6 +41,6 @@ def plot_pca(model_path, train_data_preprocessed_path):
     plt.title("scatter plot of first two principle components")
     plt.scatter(X[:, 0], X[:, 1])
     # set log-log scale
-    plt.xscale("log")
-    plt.yscale("log")
+    # plt.xscale("log")
+    # plt.yscale("log")
     plt.show()

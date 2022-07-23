@@ -84,9 +84,9 @@ class LogFeatureTransformer(
         self._setDefault(inputCol=inputCol, outputCol=outputCol)
 
     def _transform(self, dataset):
-        @F.pandas_udf("array<double>", F.PandasUDFType.SCALAR)
+        @F.pandas_udf("array<double>")
         def log_features(features):
-            return features.apply(lambda x: np.log(x + 2.0))
+            return features.apply(lambda x: np.log(x + 1.0))
 
         return dataset.withColumn(
             self.getOutputCol(),
