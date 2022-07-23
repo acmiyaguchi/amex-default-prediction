@@ -21,6 +21,11 @@ def get_parquet_feature_size(path, field="features"):
         return len(df[field].iloc[0])
 
 
+def get_spark_feature_size(spark, path):
+    df, _, _ = read_train_data(spark, path, cache=False)
+    return df.head().features.shape[0]
+
+
 def transform_vector_to_array(df, partitions=32):
     """Cast the features and labels fields from the v2 transformed dataset to
     align with the expectations of torch."""
@@ -39,6 +44,7 @@ class PetastormDataModule(pl.LightningDataModule):
         train_data_preprocessed_path,
         train_ratio=0.8,
         batch_size=32,
+        num_partitions=20,
     ):
         super().__init__()
         spark.conf.set(
@@ -48,6 +54,7 @@ class PetastormDataModule(pl.LightningDataModule):
         self.train_data_preprocessed_path = train_data_preprocessed_path
         self.train_ratio = train_ratio
         self.batch_size = batch_size
+        self.num_partitions = num_partitions
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
@@ -59,31 +66,34 @@ class PetastormDataModule(pl.LightningDataModule):
 
         self.input_size = val_df.head().features.size
         self.converter_train = make_spark_converter(
-            transform_vector_to_array(train_df).select("features", "label")
+            transform_vector_to_array(train_df, self.num_partitions).select(
+                "features", "label"
+            )
         )
         self.converter_val = make_spark_converter(
-            transform_vector_to_array(val_df).select("features", "label")
+            transform_vector_to_array(val_df, self.num_partitions).select(
+                "features", "label"
+            )
         )
 
     def train_dataloader(self):
         with self.converter_train.make_torch_dataloader(
-            batch_size=self.batch_size
+            batch_size=self.batch_size, num_epochs=1
         ) as loader:
             for batch in loader:
                 yield batch
 
     def val_dataloader(self):
         with self.converter_val.make_torch_dataloader(
-            batch_size=self.batch_size
+            batch_size=self.batch_size, num_epochs=1
         ) as loader:
             for batch in loader:
                 yield batch
 
 
 class ArrowDataset(IterableDataset):
-    def __init__(self, path, batch_size=32, filter=None):
+    def __init__(self, path, filter=None):
         self.path = path
-        self.batch_size = batch_size
         self.filter = filter
 
     def __iter__(self):
@@ -107,12 +117,12 @@ class ArrowDataset(IterableDataset):
         dataset = ds.dataset(files[start:end], format="parquet")
 
         # https://arrow.apache.org/cookbook/py/io.html
-        for batch in dataset.to_batches(batch_size=self.batch_size, filter=self.filter):
+        for batch in dataset.to_batches(filter=self.filter):
             df = batch.to_pandas()
-            yield {
-                "features": torch.from_numpy(np.stack(df.features.values)).float(),
-                "label": torch.from_numpy(df.label.values).long(),
-            }
+            for item in df.itertuples():
+                # this is not ideal because it doesn't take advantage of batching
+                # achieves ~50it/s
+                yield dict(features=torch.from_numpy(item.features), label=item.label)
 
 
 class ArrowDataModule(pl.LightningDataModule):
@@ -121,7 +131,7 @@ class ArrowDataModule(pl.LightningDataModule):
         train_data_preprocessed_path,
         train_ratio=0.8,
         batch_size=32,
-        num_workers=10,
+        num_workers=8,
         **kwargs,
     ):
         super().__init__()
@@ -129,10 +139,9 @@ class ArrowDataModule(pl.LightningDataModule):
         self.train_ratio = train_ratio
         self.batch_size = batch_size
         self.kwargs = dict(
-            batch_size=self.batch_size,
+            batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=True,
-            drop_last=True,
             **kwargs,
         )
 
@@ -140,12 +149,10 @@ class ArrowDataModule(pl.LightningDataModule):
         # read the data so we can do stuff with it
         self.train_ds = ArrowDataset(
             self.train_data_preprocessed_path,
-            batch_size=self.batch_size,
             filter=ds.field("sample_id") < self.train_ratio * 100,
         )
         self.val_ds = ArrowDataset(
             self.train_data_preprocessed_path,
-            batch_size=self.batch_size,
             filter=ds.field("sample_id") >= self.train_ratio * 100,
         )
 

@@ -18,7 +18,7 @@ def main(model_name, data_module):
     output = intermediate_root / "models" / model_name / unique_name()
     if data_module == "petastorm":
         dataset = "train_data_preprocessed_v2"
-        spark_driver_memory = "40g"
+        spark_driver_memory = "20g"
     elif data_module == "arrow":
         dataset = "train_data_preprocessed_torch_v2"
         spark_driver_memory = "10g"

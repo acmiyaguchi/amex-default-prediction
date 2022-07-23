@@ -30,7 +30,7 @@ def cache_path():
 
 @pytest.fixture
 def synthetic_train_df(spark):
-    num_rows = 20
+    num_rows = 40
     num_features = 3
     pdf = pd.DataFrame(
         dict(

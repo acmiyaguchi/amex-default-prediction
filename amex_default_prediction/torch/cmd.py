@@ -6,7 +6,12 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 from amex_default_prediction.utils import spark_session
 
-from .data_module import ArrowDataModule, PetastormDataModule, get_parquet_feature_size
+from .data_module import (
+    ArrowDataModule,
+    PetastormDataModule,
+    get_parquet_feature_size,
+    get_spark_feature_size,
+)
 from .net import StrawmanNet
 
 
@@ -27,15 +32,19 @@ def fit_strawman(
     batch_size,
     data_module,
 ):
+    spark = spark_session()
 
-    # get the input size for the model
-    input_size = get_parquet_feature_size(train_data_preprocessed_path)
+    if data_module == "petastorm":
+        input_size = get_spark_feature_size(spark, train_data_preprocessed_path)
+    elif data_module == "arrow":
+        input_size = get_parquet_feature_size(train_data_preprocessed_path)
+
     model = StrawmanNet(input_size=input_size)
     print(model)
 
     if data_module == "petastorm":
         dm = PetastormDataModule(
-            spark_session(),
+            spark,
             cache_dir,
             train_data_preprocessed_path,
             train_ratio=train_ratio,
@@ -46,6 +55,7 @@ def fit_strawman(
             train_data_preprocessed_path,
             train_ratio=train_ratio,
             batch_size=batch_size,
+            num_workers=8,
         )
 
     trainer = pl.Trainer(
@@ -53,6 +63,7 @@ def fit_strawman(
         default_root_dir=output_path,
         detect_anomaly=True,
         logger=TensorBoardLogger(output_path, log_graph=True),
+        reload_dataloaders_every_n_epochs=1,
         callbacks=[
             EarlyStopping(monitor="val_loss", mode="min"),
             ModelCheckpoint(monitor="val_loss", auto_insert_metric_name=True),
