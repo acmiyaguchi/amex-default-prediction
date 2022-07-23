@@ -40,7 +40,7 @@ def main(model_name):
                     [
                         (
                             intermediate_root
-                            / "models/pca/20220723040200-0.14.0-3c80ac4"
+                            / "models/pca/20220723062755-0.15.1-a8e1240"
                         ).as_posix()
                     ]
                     if "with-pca" in model_name

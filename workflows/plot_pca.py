@@ -17,9 +17,9 @@ def main():
                 "plot",
                 "plot-pca",
                 (
-                    intermediate_root / "models/pca/20220723005340-0.14.0-9437c3d"
+                    intermediate_root / "models/pca/20220723062755-0.15.1-a8e1240"
                 ).as_posix(),
-                (intermediate_root / "train_data_preprocessed_v2").as_posix(),
+                (intermediate_root / "train_data_preprocessed_v3").as_posix(),
             ]
         ),
     )

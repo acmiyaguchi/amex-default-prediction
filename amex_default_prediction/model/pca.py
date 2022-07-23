@@ -1,10 +1,10 @@
 import click
 from pyspark.ml import Pipeline
-from pyspark.ml.feature import PCA, RobustScaler
+from pyspark.ml.feature import PCA, Imputer, MinMaxScaler, RobustScaler, StandardScaler
 
 from amex_default_prediction.utils import spark_session
 
-from .base import fit_generic
+from .base import LogFeatureTransformer, fit_generic
 
 
 @click.command()
@@ -17,20 +17,22 @@ def fit(train_data_preprocessed_path, output_path, train_ratio):
         spark,
         Pipeline(
             stages=[
-                RobustScaler(
-                    inputCol="features",
-                    outputCol="features_scaled",
-                    withScaling=True,
-                    withCentering=True,
+                MinMaxScaler(inputCol="features", outputCol="features_minmax"),
+                LogFeatureTransformer(
+                    inputCol="features_minmax", outputCol="features_log"
                 ),
-                PCA(k=32, inputCol="features_scaled", outputCol="features_pca"),
+                StandardScaler(
+                    inputCol="features_log",
+                    outputCol="features_scaled",
+                    withStd=True,
+                    withMean=True,
+                ),
+                PCA(k=64, inputCol="features_scaled", outputCol="features_pca"),
             ]
         ),
         None,
         train_data_preprocessed_path,
         output_path,
         train_ratio=train_ratio,
-        data_most_recent_only=False,
         train_most_recent_only=False,
-        validation_most_recent_only=False,
     )

@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.feature import SQLTransformer, VectorAssembler
-from pyspark.ml.functions import vector_to_array
+from pyspark.ml.functions import array_to_vector, vector_to_array
 from pyspark.ml.param.shared import (
     HasInputCol,
     HasOutputCol,
@@ -67,6 +69,28 @@ class ExtractVectorIndexTransformer(
         return dataset.withColumn(
             self.getOutputCol(),
             vector_to_array(self.getInputCol())[self.getIndexCol()].cast("float"),
+        )
+
+
+class LogFeatureTransformer(
+    Transformer,
+    HasInputCol,
+    HasOutputCol,
+    DefaultParamsWritable,
+    DefaultParamsReadable,
+):
+    def __init__(self, inputCol="features", outputCol="features_log"):
+        super().__init__()
+        self._setDefault(inputCol=inputCol, outputCol=outputCol)
+
+    def _transform(self, dataset):
+        @F.pandas_udf("array<double>", F.PandasUDFType.SCALAR)
+        def log_features(features):
+            return features.apply(lambda x: np.log(x + 2.0))
+
+        return dataset.withColumn(
+            self.getOutputCol(),
+            array_to_vector(log_features(vector_to_array(self.getInputCol()))),
         )
 
 
