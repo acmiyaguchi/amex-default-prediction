@@ -15,6 +15,8 @@ from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
+from amex_default_prediction.torch.data_module import transform_vector_to_array
+
 from .utils import spark_session
 
 
@@ -206,3 +208,13 @@ def preprocess_training_dataset(
 
     transforms.write().overwrite().save((Path(output_path) / "pipeline").as_posix())
     df.write.parquet((Path(output_path) / "data").as_posix(), mode="overwrite")
+
+
+@transform_group.command()
+@click.argument("input_path", type=click.Path(exists=True))
+@click.argument("output_path", type=click.Path())
+@click.option("--num-partitions", default=10, type=int)
+def vector_to_array(input_path, output_path, num_partitions):
+    df = spark_session().read.parquet(input_path)
+    transformed = transform_vector_to_array(df, num_partitions)
+    transformed.write.parquet(output_path, mode="overwrite")

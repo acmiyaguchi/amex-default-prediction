@@ -74,13 +74,14 @@ def read_train_data(
     spark,
     train_data_preprocessed_path,
     train_ratio=0.8,
+    cache=True,
     data_most_recent_only=True,
     train_most_recent_only=True,
     validation_most_recent_only=True,
 ):
-    data = spark.read.parquet(
-        (Path(train_data_preprocessed_path) / "data").as_posix()
-    ).cache()
+    data = spark.read.parquet((Path(train_data_preprocessed_path) / "data").as_posix())
+    if cache:
+        data = data.cache()
 
     train_data = data.where(f"sample_id < {train_ratio*100}")
     validation_data = data.where(f"sample_id >= {train_ratio*100}")

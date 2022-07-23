@@ -26,6 +26,10 @@ python -m workflow.model logistic  # and others
 I spent 6 hours or so trying to use sparktorch on my local machine. Much trial
 and error has lead to a few developments...
 
+I configured pytorch lightning and petastorm using the v2 dataset. It seems to
+run at around 60-70 it/s, which seems to be fairly slow. I'll try loading the
+data directly from parquet, otherwise just suffer with the slow epochs.
+
 ### resource
 
 - https://www.markhneedham.com/blog/2017/03/25/luigi-externalprogramtask-example-converting-json-csv/
@@ -43,3 +47,4 @@ and error has lead to a few developments...
 - https://stackoverflow.com/questions/37270446/how-to-create-a-custom-estimator-in-pyspark
 - https://stackoverflow.com/questions/18204782/runtimeerror-on-windows-trying-python-multiprocessing
 - https://github.com/pytorch/pytorch/issues/25767
+- https://github.com/Lightning-AI/lightning/issues/1586

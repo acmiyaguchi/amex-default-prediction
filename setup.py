@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="amex_default_prediction",
-    version="0.12.0",
+    version="0.13.0",
     description="Utilities for amex default prediction challenge",
     author="Anthony Miyaguchi",
     author_email="acmiyaguchi@gmail.com",
@@ -18,6 +18,7 @@ setuptools.setup(
         "pyspark",
         "torch",
         "sparktorch",
+        "petastorm[torch]",
         "pytorch-lightning",
         "torch-summary",
         'importlib-metadata>=0.12;python_version<"3.8"',

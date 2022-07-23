@@ -34,6 +34,19 @@ def main(overwrite):
         print_only=output.exists() and not overwrite,
     )
 
+    output = intermediate_root / "train_data_preprocessed_torch_v2"
+    run_spark(
+        " ".join(
+            [
+                "transform",
+                "vector-to-array",
+                (intermediate_root / "train_data_preprocessed_v2" / "data").as_posix(),
+                output.as_posix(),
+            ]
+        ),
+        print_only=output.exists() and not overwrite,
+    )
+
 
 if __name__ == "__main__":
     main()
