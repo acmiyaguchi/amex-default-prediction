@@ -6,12 +6,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 from amex_default_prediction.utils import spark_session
 
-from .data_module import (
-    ArrowDataModule,
-    PetastormDataModule,
-    get_parquet_feature_size,
-    get_spark_feature_size,
-)
+from .data_module import PetastormDataModule, get_spark_feature_size
 from .net import StrawmanNet
 
 
@@ -20,43 +15,26 @@ from .net import StrawmanNet
 @click.argument("output_path", type=click.Path())
 @click.option("--train-ratio", default=0.8, type=float)
 @click.option("--cache-dir", default="file:///tmp")
-@click.option("--batch-size", default=512, type=int)
-@click.option(
-    "--data-module", default="petastorm", type=click.Choice(["petastorm", "arrow"])
-)
+@click.option("--batch-size", default=128, type=int)
 def fit_strawman(
     train_data_preprocessed_path,
     output_path,
     train_ratio,
     cache_dir,
     batch_size,
-    data_module,
 ):
     spark = spark_session()
-
-    if data_module == "petastorm":
-        input_size = get_spark_feature_size(spark, train_data_preprocessed_path)
-    elif data_module == "arrow":
-        input_size = get_parquet_feature_size(train_data_preprocessed_path)
-
+    input_size = get_spark_feature_size(spark, train_data_preprocessed_path)
     model = StrawmanNet(input_size=input_size)
     print(model)
 
-    if data_module == "petastorm":
-        dm = PetastormDataModule(
-            spark,
-            cache_dir,
-            train_data_preprocessed_path,
-            train_ratio=train_ratio,
-            batch_size=batch_size,
-        )
-    elif data_module == "arrow":
-        dm = ArrowDataModule(
-            train_data_preprocessed_path,
-            train_ratio=train_ratio,
-            batch_size=batch_size,
-            num_workers=8,
-        )
+    dm = PetastormDataModule(
+        spark,
+        cache_dir,
+        train_data_preprocessed_path,
+        train_ratio=train_ratio,
+        batch_size=batch_size,
+    )
 
     trainer = pl.Trainer(
         gpus=-1,
