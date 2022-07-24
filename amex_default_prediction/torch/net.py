@@ -95,7 +95,8 @@ class TransformerModel(pl.LightningModule):
 
     def __init__(self, d_model, dropout=0.1, **kwargs):
         super(TransformerModel, self).__init__()
-        self.pos_encoder = PositionalEncoding(d_model, dropout=dropout)
+        self.d_model = d_model
+        # self.pos_encoder = PositionalEncoding(d_model, dropout=dropout)
         self.transformer = nn.Transformer(d_model, dropout=dropout, **kwargs)
 
     def _generate_square_subsequent_mask(self, sz):
@@ -137,6 +138,12 @@ class TransformerModel(pl.LightningModule):
             batch["src_key_padding_mask"],
             batch["tgt_key_padding_mask"],
         )
+        # reshape x and y to be [batch_size, seq_len, embed_dim]
+        x = x.view(x.shape[0], -1, self.d_model)
+        y = y.view(y.shape[0], -1, self.d_model)
+        # and now reorder dimensions to be [seq_len, batch_size, embed_dim]
+        x = x.transpose(0, 1)
+        y = y.transpose(0, 1)
         z = self(
             x,
             y,

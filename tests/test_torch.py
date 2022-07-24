@@ -15,7 +15,7 @@ from amex_default_prediction.torch.data_module import (
     get_spark_feature_size,
     transform_into_transformer_pairs,
 )
-from amex_default_prediction.torch.net import StrawmanNet
+from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
 
 
 def test_get_parquet_feature_size(spark, synthetic_train_data_path):
@@ -51,8 +51,8 @@ def test_trainer_accepts_petastorm_data_module(spark, synthetic_train_data_path)
 
 @pytest.fixture
 def synthetic_transformer_train_pdf():
-    num_customers = 10
-    num_features = 3
+    num_customers = 40
+    num_features = 8
     max_seen = 8
     rows = []
     for i in range(num_customers):
@@ -96,7 +96,7 @@ def test_test_create_transformer_pair(synthetic_transformer_train_pdf):
         print(res)
         row = res.iloc[0]
         assert len(row.src) > 0
-        assert len(row.src[0]) == 3
+        assert len(row.src[0]) == 8
         assert len(row.tgt) > 0
         assert len(row.src_key_padding_mask) == length
         assert len(row.tgt_key_padding_mask) == length
@@ -116,10 +116,10 @@ def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
     assert df.count() == 10
     df.show(vertical=True, truncate=80)
 
-    pdf = df.select(F.size("src").alias("precondition")).toPandas()
+    pdf = df.select((F.size("src") / F.lit(3)).alias("precondition")).toPandas()
     assert (pdf.precondition != 4).sum() == 0
 
-    pdf = df.select(F.size("tgt").alias("precondition")).toPandas()
+    pdf = df.select((F.size("tgt") / F.lit(3)).alias("precondition")).toPandas()
     assert (pdf.precondition != 4).sum() == 0
 
     pdf = df.select(
@@ -135,8 +135,13 @@ def test_petastorm_transformer_data_module_has_fields(
     spark, synthetic_transformer_train_df_path
 ):
     batch_size = 10
+    subsequence_length = 4
     data_module = PetastormTransformerDataModule(
-        spark, "file:///tmp", synthetic_transformer_train_df_path, batch_size=batch_size
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
     )
     data_module.setup()
     dataloader = data_module.train_dataloader()
@@ -148,16 +153,33 @@ def test_petastorm_transformer_data_module_has_fields(
             "tgt",
             "src_key_padding_mask",
             "tgt_key_padding_mask",
+            "subsequence_length",
         }
         assert isinstance(batch["src"], torch.Tensor)
         assert isinstance(batch["tgt"], torch.Tensor)
-        assert batch["src"].shape == batch["tgt"].shape == torch.Size([batch_size, 3])
+        assert (
+            batch["src"].shape
+            == batch["tgt"].shape
+            == torch.Size([batch_size, 8 * subsequence_length])
+        )
+        # check subsequence length
+        assert batch["subsequence_length"][0] == subsequence_length
         break
     assert batches == 1
 
 
-def test_trainer_accepts_petastorm_data_module(spark, synthetic_train_data_path):
-    data_module = PetastormDataModule(spark, "file:///tmp", synthetic_train_data_path)
+def test_transformer_trainer_accepts_petastorm_transformer_data_module(
+    spark, synthetic_transformer_train_df_path
+):
+    batch_size = 10
+    subsequence_length = 4
+    data_module = PetastormTransformerDataModule(
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
+    )
     trainer = pl.Trainer(fast_dev_run=True)
-    model = StrawmanNet(input_size=3)
+    model = TransformerModel(d_model=8)
     trainer.fit(model, datamodule=data_module)

@@ -35,7 +35,8 @@ def create_transformer_pair(pdf: pd.DataFrame, length: int) -> pd.DataFrame:
     """Utility pandas udf for creating transformer pairs.
 
     This seems to fail inside of `.applyInPandas`, so I've opted for a more
-    verbose solution using pure pyspark functions.
+    verbose solution using pure pyspark functions. It looks like the reason for
+    failure is probably the two dimensional array.
     """
     # fmt: off
     # import multiprocessing
@@ -139,19 +140,27 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
         .withColumn(
             "src_key_padding_mask",
             F.concat(
-                F.array_repeat(F.lit(False), F.lit(length) - F.col("k_src")),
-                F.array_repeat(F.lit(True), F.col("k_src")),
+                F.array_repeat(F.lit(True), F.lit(length) - F.col("k_src")),
+                F.array_repeat(F.lit(False), F.col("k_src")),
             ),
         )
         .withColumn(
             "tgt_key_padding_mask",
             F.concat(
-                F.array_repeat(F.lit(True), F.col("k_tgt")),
-                F.array_repeat(F.lit(False), F.lit(length) - F.col("k_tgt")),
+                F.array_repeat(F.lit(False), F.col("k_tgt")),
+                F.array_repeat(F.lit(True), F.lit(length) - F.col("k_tgt")),
             ),
         )
+        # now lets flatten the src and tgt rows
+        .withColumn("src", F.flatten("src"))
+        .withColumn("tgt", F.flatten("tgt"))
         .select(
-            "customer_ID", "src", "tgt", "src_key_padding_mask", "tgt_key_padding_mask"
+            "customer_ID",
+            "src",
+            "tgt",
+            "src_key_padding_mask",
+            "tgt_key_padding_mask",
+            F.lit(length).alias("subsequence_length"),
         )
     )
 
@@ -213,8 +222,16 @@ class PetastormDataModule(pl.LightningDataModule):
 
 
 class PetastormTransformerDataModule(PetastormDataModule):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        spark,
+        cache_dir,
+        train_data_preprocessed_path,
+        subsequence_length=8,
+        **kwargs
+    ):
+        super().__init__(spark, cache_dir, train_data_preprocessed_path, **kwargs)
+        self.subsequence_length = subsequence_length
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
@@ -225,61 +242,17 @@ class PetastormTransformerDataModule(PetastormDataModule):
         )
 
         self.input_size = train_df.head().features.size
-        sequence_length = 8
-
-        # mega inefficient because we go from dataframe to RDD to get python
-        # types
-        TransformerSchema = Unischema(
-            "TransformerSchema",
-            [
-                UnischemaField(
-                    "src",
-                    np.float64,
-                    (sequence_length, self.input_size),
-                    NdarrayCodec(),
-                    False,
-                ),
-                UnischemaField(
-                    "tgt",
-                    np.float64,
-                    (sequence_length, self.input_size),
-                    NdarrayCodec(),
-                    False,
-                ),
-                UnischemaField(
-                    "src_key_padding_mask",
-                    np.bool_,
-                    (sequence_length,),
-                    NdarrayCodec(),
-                    False,
-                ),
-                UnischemaField(
-                    "tgt_key_padding_mask",
-                    np.bool_,
-                    (sequence_length,),
-                    NdarrayCodec(),
-                    False,
-                ),
-            ],
-        )
-
-        def convert_row(row):
-            d = row.asDict()
-            return {k: np.array(v) for k, v in d.items()}
 
         def make_converter(df):
             return make_spark_converter(
-                self.spark.createDataFrame(
-                    transform_into_transformer_pairs(
-                        df, sequence_length, partitions=self.num_partitions
-                    )
-                    .select(
-                        "src", "tgt", "src_key_padding_mask", "tgt_key_padding_mask"
-                    )
-                    .rdd.map(
-                        lambda x: dict_to_spark_row(TransformerSchema, convert_row(x))
-                    ),
-                    schema=TransformerSchema.as_spark_schema(),
+                transform_into_transformer_pairs(
+                    df, self.subsequence_length, partitions=self.num_partitions
+                ).select(
+                    "src",
+                    "tgt",
+                    "src_key_padding_mask",
+                    "tgt_key_padding_mask",
+                    "subsequence_length",
                 )
             )
 
