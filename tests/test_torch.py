@@ -47,7 +47,7 @@ def test_trainer_accepts_petastorm_data_module(spark, synthetic_train_data_path)
 
 @pytest.fixture
 def synthetic_transformer_train_pdf():
-    num_customers = 40
+    num_customers = 10
     num_features = 3
     max_seen = 8
     rows = []
@@ -93,7 +93,27 @@ def test_test_create_transformer_pair(synthetic_transformer_train_pdf):
 
 def test_synthetic_transformer_train_df(synthetic_transformer_train_df):
     df = synthetic_transformer_train_df.cache()
-    assert df.count() == 40
+    assert df.count() == 10
+    df.show(vertical=True, truncate=80)
+
+    pdf = df.select(F.size("src").alias("precondition")).toPandas()
+    assert ((pdf.precondition == 0).sum() + (pdf.precondition > 4).sum()) == 0
+
+    pdf = df.select(F.size("tgt").alias("precondition")).toPandas()
+    assert ((pdf.precondition == 0).sum() + (pdf.precondition > 4).sum()) == 0
+
+    pdf = df.select((F.size("src") + F.size("tgt")).alias("precondition")).toPandas()
+    assert ((pdf.precondition == 0).sum() + (pdf.precondition > 8).sum()) == 0
+
+    pdf = df.select(
+        (F.size("src_key_padding_mask") + F.size("tgt_key_padding_mask")).alias(
+            "precondition"
+        )
+    ).toPandas()
+    assert (pdf.precondition != 8).sum() == 0
+
     pdf = df.toPandas()
-    assert len(pdf.iloc[0].src) == 4
+    for row in pdf.itertuples():
+        assert len(row.src) == row.src_key_padding_mask.sum()
+        assert len(row.tgt) == row.tgt_key_padding_mask.sum()
     df.unpersist()

@@ -8,6 +8,7 @@ import pyarrow.dataset as ds
 import pytorch_lightning as pl
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
 from pyspark.ml.functions import array_to_vector, vector_to_array
+from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 from amex_default_prediction.model.base import read_train_data
@@ -29,7 +30,11 @@ def transform_vector_to_array(df, partitions=32):
 
 
 def create_transformer_pair(pdf: pd.DataFrame, length: int) -> pd.DataFrame:
-    """Utility pandas udf for creating transformer pairs."""
+    """Utility pandas udf for creating transformer pairs.
+
+    This seems to fail inside of `.applyInPandas`, so I've opted for a more
+    verbose solution using pure pyspark functions.
+    """
     # fmt: off
     # import multiprocessing
     # f = open('fault_%s.log' % multiprocessing.current_process().name, 'w')
@@ -75,21 +80,54 @@ def create_transformer_pair(pdf: pd.DataFrame, length: int) -> pd.DataFrame:
 
 def transform_into_transformer_pairs(df, length=4):
     """Convert the training/test dataset for use in a transformer."""
+    w = Window.partitionBy("customer_ID").orderBy("age_days")
     return (
         df.withColumn("features", vector_to_array("features"))
-        .select("customer_ID", "features", "age_days")
+        .select(
+            "customer_ID", F.collect_list("features").over(w).alias("features_list")
+        )
         .groupBy("customer_ID")
-        .applyInPandas(
-            functools.partial(create_transformer_pair, length=length),
-            schema=",".join(
-                [
-                    "customer_ID string",
-                    "src array<array<double>>",
-                    "tgt array<array<double>>",
-                    "src_key_padding_mask array<boolean>",
-                    "tgt_key_padding_mask array<boolean>",
-                ]
+        .agg(F.max("features_list").alias("features_list"))
+        .withColumn("n", F.size("features_list"))
+        # this is not pleasant to read...
+        .withColumn(
+            "src",
+            F.when(
+                F.col("n") <= length,
+                F.slice("features_list", 1, F.col("n") - 1),
+            ).otherwise(
+                F.when(
+                    F.col("n") <= 2 * length,
+                    F.slice("features_list", 1, length),
+                ).otherwise(F.slice("features_list", -(2 * length) + 1, length))
             ),
+        )
+        .withColumn(
+            "tgt",
+            F.when(F.col("n") <= length, F.slice("features_list", -1, 1)).otherwise(
+                F.when(
+                    F.col("n") <= 2 * length, F.slice("features_list", length, length)
+                ).otherwise(F.slice("features_list", -length, length))
+            ),
+        )
+        .withColumn("k_src", F.size("src"))
+        .withColumn("k_tgt", F.size("tgt"))
+        .withColumn(
+            "src_key_padding_mask",
+            F.concat(
+                F.array_repeat(F.lit(False), F.lit(length) - F.col("k_src")),
+                F.array_repeat(F.lit(True), F.col("k_src")),
+            ),
+        )
+        .withColumn(
+            "tgt_key_padding_mask",
+            F.concat(
+                F.array_repeat(F.lit(True), F.col("k_tgt")),
+                F.array_repeat(F.lit(False), F.lit(length) - F.col("k_tgt")),
+            ),
+        )
+        .select(
+            "customer_ID", "src", "tgt", "src_key_padding_mask", "tgt_key_padding_mask"
         )
     )
 
