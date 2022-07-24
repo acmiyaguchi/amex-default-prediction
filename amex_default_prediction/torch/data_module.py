@@ -6,7 +6,9 @@ import pandas as pd
 import pyarrow  # noqa: F401 pylint: disable=W0611
 import pyarrow.dataset as ds
 import pytorch_lightning as pl
+from petastorm.codecs import CompressedImageCodec, NdarrayCodec, ScalarCodec
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
+from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 from pyspark.ml.functions import array_to_vector, vector_to_array
 from pyspark.sql import Window
 from pyspark.sql import functions as F
@@ -78,7 +80,7 @@ def create_transformer_pair(pdf: pd.DataFrame, length: int) -> pd.DataFrame:
     return res
 
 
-def transform_into_transformer_pairs(df, length=4):
+def transform_into_transformer_pairs(df, length=4, partitions=32):
     """Convert the training/test dataset for use in a transformer."""
     w = Window.partitionBy("customer_ID").orderBy("age_days")
     return (
@@ -89,7 +91,7 @@ def transform_into_transformer_pairs(df, length=4):
         .groupBy("customer_ID")
         .agg(F.max("features_list").alias("features_list"))
         .withColumn("n", F.size("features_list"))
-        # this is not pleasant to read...
+        # this is not pleasant to read, but at least it doesn't require a UDF...
         .withColumn(
             "src",
             F.when(
@@ -112,6 +114,28 @@ def transform_into_transformer_pairs(df, length=4):
         )
         .withColumn("k_src", F.size("src"))
         .withColumn("k_tgt", F.size("tgt"))
+        # pad src and tgt with arrays filled with zeroes
+        .withColumn("dim", F.size(F.col("features_list")[0]))
+        .withColumn(
+            "src",
+            F.concat(
+                F.array_repeat(
+                    F.array_repeat(F.lit(0.0), F.col("dim")),
+                    F.lit(length) - F.col("k_src"),
+                ),
+                F.col("src"),
+            ),
+        )
+        .withColumn(
+            "tgt",
+            F.concat(
+                F.col("tgt"),
+                F.array_repeat(
+                    F.array_repeat(F.lit(0.0), F.col("dim")),
+                    F.lit(length) - F.col("k_tgt"),
+                ),
+            ),
+        )
         .withColumn(
             "src_key_padding_mask",
             F.concat(
@@ -161,27 +185,103 @@ class PetastormDataModule(pl.LightningDataModule):
         )
 
         self.input_size = val_df.head().features.size
-        self.converter_train = make_spark_converter(
-            transform_vector_to_array(train_df, self.num_partitions).select(
-                "features", "label"
+
+        def make_converter(df):
+            return make_spark_converter(
+                transform_vector_to_array(df, self.num_partitions).select(
+                    "features", "label"
+                )
             )
-        )
-        self.converter_val = make_spark_converter(
-            transform_vector_to_array(val_df, self.num_partitions).select(
-                "features", "label"
-            )
-        )
+
+        self.converter_train = make_converter(train_df)
+        self.converter_val = make_converter(val_df)
+
+    def _dataloader(self, converter):
+        with converter.make_torch_dataloader(
+            batch_size=self.batch_size, num_epochs=1
+        ) as loader:
+            for batch in loader:
+                yield batch
 
     def train_dataloader(self):
-        with self.converter_train.make_torch_dataloader(
-            batch_size=self.batch_size, num_epochs=1
-        ) as loader:
-            for batch in loader:
-                yield batch
+        for batch in self._dataloader(self.converter_train):
+            yield batch
 
     def val_dataloader(self):
-        with self.converter_val.make_torch_dataloader(
-            batch_size=self.batch_size, num_epochs=1
-        ) as loader:
-            for batch in loader:
-                yield batch
+        for batch in self._dataloader(self.converter_val):
+            yield batch
+
+
+class PetastormTransformerDataModule(PetastormDataModule):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def setup(self, stage=None):
+        # read the data so we can do stuff with it
+        _, train_df, val_df = read_train_data(
+            self.spark,
+            Path(self.train_data_preprocessed_path).as_posix(),
+            self.train_ratio,
+        )
+
+        self.input_size = train_df.head().features.size
+        sequence_length = 8
+
+        # mega inefficient because we go from dataframe to RDD to get python
+        # types
+        TransformerSchema = Unischema(
+            "TransformerSchema",
+            [
+                UnischemaField(
+                    "src",
+                    np.float64,
+                    (sequence_length, self.input_size),
+                    NdarrayCodec(),
+                    False,
+                ),
+                UnischemaField(
+                    "tgt",
+                    np.float64,
+                    (sequence_length, self.input_size),
+                    NdarrayCodec(),
+                    False,
+                ),
+                UnischemaField(
+                    "src_key_padding_mask",
+                    np.bool_,
+                    (sequence_length,),
+                    NdarrayCodec(),
+                    False,
+                ),
+                UnischemaField(
+                    "tgt_key_padding_mask",
+                    np.bool_,
+                    (sequence_length,),
+                    NdarrayCodec(),
+                    False,
+                ),
+            ],
+        )
+
+        def convert_row(row):
+            d = row.asDict()
+            return {k: np.array(v) for k, v in d.items()}
+
+        def make_converter(df):
+            return make_spark_converter(
+                self.spark.createDataFrame(
+                    transform_into_transformer_pairs(
+                        df, sequence_length, partitions=self.num_partitions
+                    )
+                    .select(
+                        "src", "tgt", "src_key_padding_mask", "tgt_key_padding_mask"
+                    )
+                    .rdd.map(
+                        lambda x: dict_to_spark_row(TransformerSchema, convert_row(x))
+                    ),
+                    schema=TransformerSchema.as_spark_schema(),
+                )
+            )
+
+        self.converter_train = make_converter(train_df)
+        self.converter_val = make_converter(val_df)
