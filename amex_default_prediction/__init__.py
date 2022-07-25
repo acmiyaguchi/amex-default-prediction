@@ -24,8 +24,9 @@ fit.add_command(logistic.fit_with_pca, "logistic-with-pca")
 fit.add_command(gbt.fit_with_aft, "gbt-with-aft")
 fit.add_command(gbt.fit_with_pca, "gbt-with-pca")
 fit.add_command(nn.fit, "nn")
-fit.add_command(cmd.fit_strawman, "torch-strawman")
 fit.add_command(pca.fit, "pca")
+fit.add_command(cmd.fit_strawman, "torch-strawman")
+fit.add_command(cmd.fit_transformer, "torch-transformer")
 
 
 for command in [transform_group, fit, plot]:

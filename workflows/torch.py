@@ -13,7 +13,11 @@ def main(model_name):
     build_wheel()
 
     output = intermediate_root / "models" / model_name / unique_name()
-    dataset = "train_data_preprocessed_v2"
+    dataset = (
+        "test_data_preprocessed_v4"
+        if "transformer" in model_name
+        else "train_data_preprocessed_v4"
+    )
     spark_driver_memory = "20g"
 
     run_spark(
@@ -22,6 +26,16 @@ def main(model_name):
                 "fit",
                 model_name,
                 (intermediate_root / dataset).as_posix(),
+                *(
+                    [
+                        (
+                            intermediate_root
+                            / "models/pca/20220723073653-0.15.2-c5aeb38"
+                        ).as_posix()
+                    ]
+                    if "transformer" in model_name
+                    else []
+                ),
                 output.as_posix(),
             ]
         ),

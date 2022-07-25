@@ -10,15 +10,23 @@ from petastorm.codecs import CompressedImageCodec, NdarrayCodec, ScalarCodec
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 from pyspark.ml.functions import array_to_vector, vector_to_array
+from pyspark.ml.pipeline import PipelineModel
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 from amex_default_prediction.model.base import read_train_data
 
 
-def get_spark_feature_size(spark, path):
+def get_spark_feature_size(spark, path, pca_model_path=None):
     df, _, _ = read_train_data(spark, path, cache=False)
-    return df.head().features.shape[0]
+    if pca_model_path:
+        pca_model = PipelineModel.read().load(pca_model_path)
+        df = pca_model.transform(df).withColumn("features", F.col("features_pca"))
+    return len(
+        df.select(vector_to_array("features").cast("array<float>").alias("features"))
+        .head()
+        .features
+    )
 
 
 def transform_vector_to_array(df, partitions=32):
@@ -121,7 +129,9 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             "customer_ID",
             F.collect_list("features").over(w).alias("features_list"),
             # age encoded into a sequence position
-            F.collect_list(F.col("age_days") + 1).over(w).alias("age_days_list"),
+            F.collect_list((F.col("age_days") + 1).astype("long"))
+            .over(w)
+            .alias("age_days_list"),
         )
         .groupBy("customer_ID")
         .agg(
@@ -205,8 +215,6 @@ class PetastormDataModule(pl.LightningDataModule):
             self.train_ratio,
         )
 
-        self.input_size = val_df.head().features.size
-
         def make_converter(df):
             return make_spark_converter(
                 transform_vector_to_array(df, self.num_partitions).select(
@@ -239,10 +247,12 @@ class PetastormTransformerDataModule(PetastormDataModule):
         spark,
         cache_dir,
         train_data_preprocessed_path,
+        pca_model_path=None,
         subsequence_length=8,
         **kwargs
     ):
         super().__init__(spark, cache_dir, train_data_preprocessed_path, **kwargs)
+        self.pca_model_path = pca_model_path
         self.subsequence_length = subsequence_length
 
     def setup(self, stage=None):
@@ -251,9 +261,20 @@ class PetastormTransformerDataModule(PetastormDataModule):
             self.spark,
             Path(self.train_data_preprocessed_path).as_posix(),
             self.train_ratio,
+            data_most_recent_only=False,
+            train_most_recent_only=False,
+            validation_most_recent_only=False,
+            cache=False,
         )
 
-        self.input_size = train_df.head().features.size
+        if self.pca_model_path:
+            pca_model = PipelineModel.read().load(self.pca_model_path)
+            train_df = pca_model.transform(train_df).withColumn(
+                "features", F.col("features_pca")
+            )
+            val_df = pca_model.transform(val_df).withColumn(
+                "features", F.col("features_pca")
+            )
 
         def make_converter(df):
             return make_spark_converter(

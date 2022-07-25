@@ -182,6 +182,8 @@ def preprocess_dataset(
                         customer_ID,
                         statement_date,
                         most_recent,
+                        age_days,
+                        n_statements,
                         features
                     FROM
                         __THIS__

@@ -21,9 +21,9 @@ def main(model_name):
                 (
                     intermediate_root
                     / (
-                        "test_data_preprocessed_v2"
+                        "test_data_preprocessed_v4"
                         if model_name == "pca"
-                        else "train_data_preprocessed_v3"
+                        else "train_data_preprocessed_v4"
                     )
                 ).as_posix(),
                 *(
