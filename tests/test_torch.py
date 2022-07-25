@@ -161,7 +161,6 @@ def test_petastorm_transformer_data_module_has_fields(
             "tgt_key_padding_mask",
             "src_pos",
             "tgt_pos",
-            "subsequence_length",
         }
         assert isinstance(batch["src"], torch.Tensor)
         assert isinstance(batch["tgt"], torch.Tensor)
@@ -169,10 +168,6 @@ def test_petastorm_transformer_data_module_has_fields(
             batch["src"].shape
             == batch["tgt"].shape
             == torch.Size([batch_size, 8 * subsequence_length])
-        )
-        # check subsequence length
-        assert (
-            batch["subsequence_length"].cpu().detach().numpy()[0] == subsequence_length
         )
         assert batch["src_key_padding_mask"][0].type(torch.bool).dtype == torch.bool
         assert batch["src_key_padding_mask"].cpu().detach().numpy().sum() > 0
@@ -193,6 +188,6 @@ def test_transformer_trainer_accepts_petastorm_transformer_data_module(
         batch_size=batch_size,
         subsequence_length=subsequence_length,
     )
-    trainer = pl.Trainer(fast_dev_run=True)
+    trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
     model = TransformerModel(d_model=8)
     trainer.fit(model, datamodule=data_module)

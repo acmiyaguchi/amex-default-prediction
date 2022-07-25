@@ -62,7 +62,7 @@ def fit_strawman(
 @click.argument("output_path", type=click.Path())
 @click.option("--train-ratio", default=0.8, type=float)
 @click.option("--cache-dir", default="file:///tmp")
-@click.option("--batch-size", default=32, type=int)
+@click.option("--batch-size", default=64, type=int)
 def fit_transformer(
     test_data_preprocessed_path,
     pca_model_path,

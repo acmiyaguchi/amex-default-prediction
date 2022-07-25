@@ -124,7 +124,7 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
 
     w = Window.partitionBy("customer_ID").orderBy("age_days")
     return (
-        df.withColumn("features", vector_to_array("features"))
+        df.withColumn("features", vector_to_array("features").cast("array<float>"))
         .select(
             "customer_ID",
             F.collect_list("features").over(w).alias("features_list"),
@@ -139,6 +139,7 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             F.max("age_days_list").alias("age_days_list"),
         )
         .withColumn("n", F.size("features_list"))
+        .where("n > 1")
         # this is not pleasant to read, but at least it doesn't require a UDF...
         .withColumn("src", slice_src("features_list", length))
         .withColumn("tgt", slice_tgt("features_list", length))
@@ -182,7 +183,6 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             "tgt_key_padding_mask",
             "src_pos",
             "tgt_pos",
-            F.lit(length).alias("subsequence_length"),
         )
     ).repartition(partitions)
 
@@ -196,6 +196,7 @@ class PetastormDataModule(pl.LightningDataModule):
         train_ratio=0.8,
         batch_size=32,
         num_partitions=20,
+        workers_count=20,
     ):
         super().__init__()
         spark.conf.set(
@@ -206,6 +207,7 @@ class PetastormDataModule(pl.LightningDataModule):
         self.train_ratio = train_ratio
         self.batch_size = batch_size
         self.num_partitions = num_partitions
+        self.workers_count = workers_count
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
@@ -227,7 +229,9 @@ class PetastormDataModule(pl.LightningDataModule):
 
     def _dataloader(self, converter):
         with converter.make_torch_dataloader(
-            batch_size=self.batch_size, num_epochs=1
+            batch_size=self.batch_size,
+            num_epochs=1,
+            workers_count=self.workers_count,
         ) as loader:
             for batch in loader:
                 yield batch
@@ -279,7 +283,9 @@ class PetastormTransformerDataModule(PetastormDataModule):
         def make_converter(df):
             return make_spark_converter(
                 transform_into_transformer_pairs(
-                    df, self.subsequence_length, partitions=self.num_partitions
+                    df,
+                    self.subsequence_length,
+                    partitions=self.num_partitions,
                 ).select(
                     "src",
                     "tgt",
@@ -287,7 +293,6 @@ class PetastormTransformerDataModule(PetastormDataModule):
                     "tgt_key_padding_mask",
                     "src_pos",
                     "tgt_pos",
-                    "subsequence_length",
                 )
             )
 

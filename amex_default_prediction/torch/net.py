@@ -101,12 +101,18 @@ class TransformerModel(pl.LightningModule):
     def _generate_square_subsequent_mask(self, sz):
         """Create a mask that masks starting from the right/
 
-        >>> torch.triu(torch.ones(sz, sz)) == 1
-        tensor([[ True,  True,  True],
-                [False,  True,  True],
-                [False, False,  True]])
+        >>> (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+        tensor([[ True, False, False],
+                [ True,  True, False],
+                [ True,  True,  True]])
         """
-        return torch.triu(torch.ones(sz, sz)) == 1
+        mask = (torch.triu(torch.ones(sz, sz)) == 0).transpose(0, 1)
+        # mask = (
+        #     mask.float()
+        #     .masked_fill(mask == 0, float("-inf"))
+        #     .masked_fill(mask == 1, float(0.0))
+        # )
+        return mask
 
     def _create_subsequence_mask(self, src, tgt):
         """Create the subsequence masks for src and target."""
@@ -158,7 +164,10 @@ class TransformerModel(pl.LightningModule):
             src_key_padding_mask=src_key_padding_mask.type(torch.bool),
             tgt_key_padding_mask=tgt_key_padding_mask.type(torch.bool),
         )
-        return F.cross_entropy(z, y)
+        mask = (tgt_key_padding_mask == 0).transpose(0, 1)
+        # NOTE: what is the best loss to use here? Does it even make sense to
+        # use the cross entropy loss?
+        return F.mse_loss(z[mask], y[mask])
 
     def training_step(self, train_batch, batch_idx):
         loss = self._step(train_batch)
