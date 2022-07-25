@@ -171,7 +171,12 @@ def test_petastorm_transformer_data_module_has_fields(
             == torch.Size([batch_size, 8 * subsequence_length])
         )
         # check subsequence length
-        assert batch["subsequence_length"][0] == subsequence_length
+        assert (
+            batch["subsequence_length"].cpu().detach().numpy()[0] == subsequence_length
+        )
+        assert batch["src_key_padding_mask"][0].type(torch.bool).dtype == torch.bool
+        assert batch["src_key_padding_mask"].cpu().detach().numpy().sum() > 0
+        assert batch["tgt_key_padding_mask"].cpu().detach().numpy().sum() > 0
         break
     assert batches == 1
 

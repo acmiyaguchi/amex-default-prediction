@@ -144,6 +144,9 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
         .withColumn("tgt", slice_tgt("features_list", length))
         .withColumn("src_pos", slice_src("age_days_list", length))
         .withColumn("tgt_pos", slice_tgt("age_days_list", length))
+        # create padding mask before we actually pad src/tgt
+        .withColumn("k_src", F.size("src"))
+        .withColumn("k_tgt", F.size("tgt"))
         # pad src and tgt with arrays filled with zeroes
         .withColumn("dim", F.size(F.col("features_list")[0]))
         .withColumn(
@@ -154,21 +157,18 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
         )
         .withColumn("src_pos", pad_src("src_pos", F.lit(0), length))
         .withColumn("tgt_pos", pad_tgt("tgt_pos", F.lit(0), length))
-        # create padding mask
-        .withColumn("k_src", F.size("src"))
-        .withColumn("k_tgt", F.size("tgt"))
         .withColumn(
             "src_key_padding_mask",
             F.concat(
-                F.array_repeat(F.lit(True), F.lit(length) - F.col("k_src")),
-                F.array_repeat(F.lit(False), F.col("k_src")),
+                F.array_repeat(F.lit(1), F.lit(length) - F.col("k_src")),
+                F.array_repeat(F.lit(0), F.col("k_src")),
             ),
         )
         .withColumn(
             "tgt_key_padding_mask",
             F.concat(
-                F.array_repeat(F.lit(False), F.col("k_tgt")),
-                F.array_repeat(F.lit(True), F.lit(length) - F.col("k_tgt")),
+                F.array_repeat(F.lit(0), F.col("k_tgt")),
+                F.array_repeat(F.lit(1), F.lit(length) - F.col("k_tgt")),
             ),
         )
         # now lets flatten the src and tgt rows
@@ -184,7 +184,7 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             "tgt_pos",
             F.lit(length).alias("subsequence_length"),
         )
-    )
+    ).repartition(partitions)
 
 
 class PetastormDataModule(pl.LightningDataModule):
