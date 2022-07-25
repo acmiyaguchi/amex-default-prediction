@@ -29,4 +29,4 @@ def test_random_target_prediction(spark):
 def test_amex_metric_evaluator_persists(tmp_path):
     evaluator = AmexMetricEvaluator()
     evaluator.write().overwrite().save(str(tmp_path))
-    loaded_evaluator = AmexMetricEvaluator.read().load(str(tmp_path))
+    AmexMetricEvaluator.read().load(str(tmp_path))
