@@ -195,8 +195,8 @@ class PetastormDataModule(pl.LightningDataModule):
         train_data_preprocessed_path,
         train_ratio=0.8,
         batch_size=32,
-        num_partitions=20,
-        workers_count=20,
+        num_partitions=32,
+        workers_count=16,
     ):
         super().__init__()
         spark.conf.set(

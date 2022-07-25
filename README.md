@@ -30,6 +30,9 @@ I configured pytorch lightning and petastorm using the v2 dataset. It seems to
 run at around 60-70 it/s, which seems to be fairly slow. I'll try loading the
 data directly from parquet, otherwise just suffer with the slow epochs.
 
+Batch size of 3000: 8.7GB/11GB (55% cuda, 30% copy)
+Batch size of 4000: 10.8GB/11GB (70% cuda, 40% copy)
+
 ### resource
 
 - https://www.markhneedham.com/blog/2017/03/25/luigi-externalprogramtask-example-converting-json-csv/
@@ -48,3 +51,6 @@ data directly from parquet, otherwise just suffer with the slow epochs.
 - https://stackoverflow.com/questions/18204782/runtimeerror-on-windows-trying-python-multiprocessing
 - https://github.com/pytorch/pytorch/issues/25767
 - https://github.com/Lightning-AI/lightning/issues/1586
+- https://github.com/uber/petastorm/issues/570
+- https://towardsdatascience.com/transformers-explained-visually-part-2-how-it-works-step-by-step-b49fa4a64f34
+- https://pytorch.org/tutorials/beginner/transformer_tutorial.html
