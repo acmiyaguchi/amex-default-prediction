@@ -83,60 +83,70 @@ def create_transformer_pair(pdf: pd.DataFrame, length: int) -> pd.DataFrame:
 
 def transform_into_transformer_pairs(df, length=4, partitions=32):
     """Convert the training/test dataset for use in a transformer."""
+
+    def slice_src(field, length):
+        return F.when(
+            F.col("n") <= length,
+            F.slice(F.col(field), 1, F.col("n") - 1),
+        ).otherwise(
+            F.when(
+                F.col("n") <= 2 * length,
+                F.slice(F.col(field), 1, length),
+            ).otherwise(F.slice(F.col(field), -(2 * length) + 1, length))
+        )
+
+    def slice_tgt(field, length):
+        return F.when(F.col("n") <= length, F.slice(F.col(field), -1, 1)).otherwise(
+            F.when(
+                F.col("n") <= 2 * length, F.slice(F.col(field), length, length)
+            ).otherwise(F.slice(F.col(field), -length, length))
+        )
+
+    def pad_src(field, pad, length):
+        return F.concat(
+            F.array_repeat(pad, F.lit(length) - F.size(field)),
+            F.col(field),
+        )
+
+    def pad_tgt(field, pad, length):
+        return F.concat(
+            F.col(field),
+            F.array_repeat(pad, F.lit(length) - F.size(field)),
+        )
+
     w = Window.partitionBy("customer_ID").orderBy("age_days")
     return (
         df.withColumn("features", vector_to_array("features"))
         .select(
-            "customer_ID", F.collect_list("features").over(w).alias("features_list")
+            "customer_ID",
+            F.collect_list("features").over(w).alias("features_list"),
+            # age encoded into a sequence position
+            F.collect_list(F.col("age_days") + 1).over(w).alias("age_days_list"),
         )
         .groupBy("customer_ID")
-        .agg(F.max("features_list").alias("features_list"))
+        .agg(
+            F.max("features_list").alias("features_list"),
+            F.max("age_days_list").alias("age_days_list"),
+        )
         .withColumn("n", F.size("features_list"))
         # this is not pleasant to read, but at least it doesn't require a UDF...
-        .withColumn(
-            "src",
-            F.when(
-                F.col("n") <= length,
-                F.slice("features_list", 1, F.col("n") - 1),
-            ).otherwise(
-                F.when(
-                    F.col("n") <= 2 * length,
-                    F.slice("features_list", 1, length),
-                ).otherwise(F.slice("features_list", -(2 * length) + 1, length))
-            ),
-        )
-        .withColumn(
-            "tgt",
-            F.when(F.col("n") <= length, F.slice("features_list", -1, 1)).otherwise(
-                F.when(
-                    F.col("n") <= 2 * length, F.slice("features_list", length, length)
-                ).otherwise(F.slice("features_list", -length, length))
-            ),
-        )
-        .withColumn("k_src", F.size("src"))
-        .withColumn("k_tgt", F.size("tgt"))
+        .withColumn("src", slice_src("features_list", length))
+        .withColumn("tgt", slice_tgt("features_list", length))
+        .withColumn("src_pos", slice_src("age_days_list", length))
+        .withColumn("tgt_pos", slice_tgt("age_days_list", length))
         # pad src and tgt with arrays filled with zeroes
         .withColumn("dim", F.size(F.col("features_list")[0]))
         .withColumn(
-            "src",
-            F.concat(
-                F.array_repeat(
-                    F.array_repeat(F.lit(0.0), F.col("dim")),
-                    F.lit(length) - F.col("k_src"),
-                ),
-                F.col("src"),
-            ),
+            "src", pad_src("src", F.array_repeat(F.lit(0.0), F.col("dim")), length)
         )
         .withColumn(
-            "tgt",
-            F.concat(
-                F.col("tgt"),
-                F.array_repeat(
-                    F.array_repeat(F.lit(0.0), F.col("dim")),
-                    F.lit(length) - F.col("k_tgt"),
-                ),
-            ),
+            "tgt", pad_tgt("tgt", F.array_repeat(F.lit(0.0), F.col("dim")), length)
         )
+        .withColumn("src_pos", pad_src("src_pos", F.lit(0), length))
+        .withColumn("tgt_pos", pad_tgt("tgt_pos", F.lit(0), length))
+        # create padding mask
+        .withColumn("k_src", F.size("src"))
+        .withColumn("k_tgt", F.size("tgt"))
         .withColumn(
             "src_key_padding_mask",
             F.concat(
@@ -160,6 +170,8 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             "tgt",
             "src_key_padding_mask",
             "tgt_key_padding_mask",
+            "src_pos",
+            "tgt_pos",
             F.lit(length).alias("subsequence_length"),
         )
     )
@@ -252,6 +264,8 @@ class PetastormTransformerDataModule(PetastormDataModule):
                     "tgt",
                     "src_key_padding_mask",
                     "tgt_key_padding_mask",
+                    "src_pos",
+                    "tgt_pos",
                     "subsequence_length",
                 )
             )

@@ -113,13 +113,13 @@ def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
     ).cache()
     df.printSchema()
 
-    assert df.count() == 10
     df.show(vertical=True, truncate=80)
+    assert df.count() == 40
 
-    pdf = df.select((F.size("src") / F.lit(3)).alias("precondition")).toPandas()
+    pdf = df.select((F.size("src") / F.lit(8)).alias("precondition")).toPandas()
     assert (pdf.precondition != 4).sum() == 0
 
-    pdf = df.select((F.size("tgt") / F.lit(3)).alias("precondition")).toPandas()
+    pdf = df.select((F.size("tgt") / F.lit(8)).alias("precondition")).toPandas()
     assert (pdf.precondition != 4).sum() == 0
 
     pdf = df.select(
@@ -127,6 +127,12 @@ def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
             "precondition"
         )
     ).toPandas()
+    assert (pdf.precondition != 8).sum() == 0
+
+    pdf = df.select(
+        (F.size("src_pos") + F.size("tgt_pos")).alias("precondition")
+    ).toPandas()
+
     assert (pdf.precondition != 8).sum() == 0
     df.unpersist()
 
@@ -153,6 +159,8 @@ def test_petastorm_transformer_data_module_has_fields(
             "tgt",
             "src_key_padding_mask",
             "tgt_key_padding_mask",
+            "src_pos",
+            "tgt_pos",
             "subsequence_length",
         }
         assert isinstance(batch["src"], torch.Tensor)

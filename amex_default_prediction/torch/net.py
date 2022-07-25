@@ -56,12 +56,12 @@ class PositionalEncoding(nn.Module):
     Args:
         d_model: the embed dim (required).
         dropout: the dropout value (default=0.1).
-        max_len: the max. length of the incoming sequence (default=64).
+        max_len: the max. length of the incoming sequence (default=1024).
     Examples:
         >>> pos_encoder = PositionalEncoding(d_model)
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=64):
+    def __init__(self, d_model, dropout=0.1, max_len=1024):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -72,10 +72,10 @@ class PositionalEncoding(nn.Module):
         )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
+        # pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
+    def forward(self, x, pos):
         r"""Inputs of forward function
         Args:
             x: the sequence fed to the positional encoder model (required).
@@ -85,18 +85,19 @@ class PositionalEncoding(nn.Module):
         Examples:
             >>> output = pos_encoder(x)
         """
-
-        x = x + self.pe[: x.size(0), :]
+        x = x + self.pe[pos]
         return self.dropout(x)
 
 
 class TransformerModel(pl.LightningModule):
     """Container module with a positional encoder."""
 
-    def __init__(self, d_model, dropout=0.1, **kwargs):
+    def __init__(self, d_model, max_length=1024, dropout=0.1, **kwargs):
         super(TransformerModel, self).__init__()
         self.d_model = d_model
-        # self.pos_encoder = PositionalEncoding(d_model, dropout=dropout)
+        self.pos_encoder = PositionalEncoding(
+            d_model, dropout=dropout, max_length=max_length
+        )
         self.transformer = nn.Transformer(d_model, dropout=dropout, **kwargs)
 
     def _generate_square_subsequent_mask(self, sz):
@@ -117,13 +118,16 @@ class TransformerModel(pl.LightningModule):
         src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
         return src_mask, tgt_mask
 
-    def forward(self, src, tgt, **kwargs):
+    def forward(self, src, tgt, src_pos, tgt_pos, **kwargs):
         src_mask, tgt_mask = self._create_subsequence_mask(src, tgt)
-        # TODO: implement positional encoder correctly
-        # src = self.pos_encoder(src)
-        # tgt = self.pos_encoder(tgt)
         # NOTE: we also pass in the padding mask through here
-        z = self.transformer(src, tgt, src_mask, tgt_mask, **kwargs)
+        z = self.transformer(
+            self.pos_encoder(src, src_pos),
+            self.pos_encoder(tgt, tgt_pos),
+            src_mask,
+            tgt_mask,
+            **kwargs
+        )
         return z
 
     def configure_optimizers(self):
@@ -132,21 +136,24 @@ class TransformerModel(pl.LightningModule):
         return [optimizer], [lr_scheduler]
 
     def _step(self, batch, *args, **kwargs):
-        x, y, src_key_padding_mask, tgt_key_padding_mask = (
+        x, y, src_key_padding_mask, tgt_key_padding_mask, src_pos, tgt_pos = (
             batch["src"],
             batch["tgt"],
             batch["src_key_padding_mask"],
             batch["tgt_key_padding_mask"],
+            batch["src_pos"],
+            batch["tgt_pos"],
         )
-        # reshape x and y to be [batch_size, seq_len, embed_dim]
-        x = x.view(x.shape[0], -1, self.d_model)
-        y = y.view(y.shape[0], -1, self.d_model)
-        # and now reorder dimensions to be [seq_len, batch_size, embed_dim]
-        x = x.transpose(0, 1)
-        y = y.transpose(0, 1)
+        # reshape x and y to be [batch_size, seq_len, embed_dim] and reorder
+        # dimensions to be [seq_len, batch_size, embed_dim]
+        x = x.view(x.shape[0], -1, self.d_model).transpose(0, 1)
+        y = y.view(y.shape[0], -1, self.d_model).transpose(0, 1)
+
         z = self(
             x,
             y,
+            src_pos.transpose(0, 1),
+            tgt_pos.transpose(0, 1),
             src_key_padding_mask=src_key_padding_mask,
             tgt_key_padding_mask=tgt_key_padding_mask,
         )
