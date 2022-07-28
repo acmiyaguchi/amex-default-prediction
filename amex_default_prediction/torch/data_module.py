@@ -39,57 +39,43 @@ def transform_vector_to_array(df, partitions=32):
     )
 
 
-def create_transformer_pair(pdf: pd.DataFrame, length: int) -> pd.DataFrame:
-    """Utility pandas udf for creating transformer pairs.
-
-    This seems to fail inside of `.applyInPandas`, so I've opted for a more
-    verbose solution using pure pyspark functions. It looks like the reason for
-    failure is probably the two dimensional array.
-    """
-    # fmt: off
-    # import multiprocessing
-    # f = open('fault_%s.log' % multiprocessing.current_process().name, 'w')
-    # import faulthandler; faulthandler.enable(file=f, all_threads=True)
-    # fmt: on
-    features = pdf.sort_values("age_days").features.values
-
-    # to create this data, we want to ensure that we try to fill up the src
-    # sequence before we fill up the tgt sequence. We pad the src on the left,
-    # while padding the tgt on the right.
-    if len(features) <= length:
-        src = features[-(length + 1) : -1]
-        tgt = features[-1:]
-    elif len(features) <= 2 * length:
-        # we have enough to fill up the src but not tgt
-        src = features[:length]
-        tgt = features[length:]
-    else:
-        # we have more data than we need, lets fill up the dst
-        src = features[-(2 * length) : -length]
-        tgt = features[-length:]
-
-    k = len(src)
-    src_key_padding_mask = [False] * (length - k) + [True] * k
-    k = len(tgt)
-    tgt_key_padding_mask = [True] * k + [False] * (length - k)
-
-    res = pd.DataFrame(
-        [
-            dict(
-                customer_ID=pdf.customer_ID.iloc[0],
-                src=np.stack(src),
-                tgt=np.stack(tgt),
-                src_key_padding_mask=np.array(src_key_padding_mask),
-                tgt_key_padding_mask=np.array(tgt_key_padding_mask),
-            )
-        ],
+def pad_src(field, pad, length):
+    return F.concat(
+        F.array_repeat(pad, F.lit(length) - F.size(field)),
+        F.col(field),
     )
-    res.info(verbose=True)
-    print(res.to_dict("records"), flush=True)
-    return res
 
 
-def transform_into_transformer_pairs(df, length=4, partitions=32):
+def pad_tgt(field, pad, length):
+    return F.concat(
+        F.col(field),
+        F.array_repeat(pad, F.lit(length) - F.size(field)),
+    )
+
+
+def features_age_list(df):
+    w = Window.partitionBy("customer_ID").orderBy("age_days")
+    return (
+        df.withColumn("features", vector_to_array("features").cast("array<float>"))
+        .select(
+            "customer_ID",
+            F.collect_list("features").over(w).alias("features_list"),
+            # age encoded into a sequence position
+            F.collect_list((F.col("age_days") + 1).astype("long"))
+            .over(w)
+            .alias("age_days_list"),
+        )
+        .groupBy("customer_ID")
+        .agg(
+            F.max("features_list").alias("features_list"),
+            F.max("age_days_list").alias("age_days_list"),
+        )
+        .withColumn("n", F.size("features_list"))
+        .withColumn("dim", F.size(F.col("features_list")[0]))
+    )
+
+
+def transform_into_transformer_pairs(df, length=4):
     """Convert the training/test dataset for use in a transformer."""
 
     def slice_src(field, length):
@@ -110,35 +96,8 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             ).otherwise(F.slice(F.col(field), -length, length))
         )
 
-    def pad_src(field, pad, length):
-        return F.concat(
-            F.array_repeat(pad, F.lit(length) - F.size(field)),
-            F.col(field),
-        )
-
-    def pad_tgt(field, pad, length):
-        return F.concat(
-            F.col(field),
-            F.array_repeat(pad, F.lit(length) - F.size(field)),
-        )
-
-    w = Window.partitionBy("customer_ID").orderBy("age_days")
     return (
-        df.withColumn("features", vector_to_array("features").cast("array<float>"))
-        .select(
-            "customer_ID",
-            F.collect_list("features").over(w).alias("features_list"),
-            # age encoded into a sequence position
-            F.collect_list((F.col("age_days") + 1).astype("long"))
-            .over(w)
-            .alias("age_days_list"),
-        )
-        .groupBy("customer_ID")
-        .agg(
-            F.max("features_list").alias("features_list"),
-            F.max("age_days_list").alias("age_days_list"),
-        )
-        .withColumn("n", F.size("features_list"))
+        features_age_list(df)
         .where("n > 1")
         # this is not pleasant to read, but at least it doesn't require a UDF...
         .withColumn("src", slice_src("features_list", length))
@@ -149,7 +108,6 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
         .withColumn("k_src", F.size("src"))
         .withColumn("k_tgt", F.size("tgt"))
         # pad src and tgt with arrays filled with zeroes
-        .withColumn("dim", F.size(F.col("features_list")[0]))
         .withColumn(
             "src", pad_src("src", F.array_repeat(F.lit(0.0), F.col("dim")), length)
         )
@@ -184,7 +142,40 @@ def transform_into_transformer_pairs(df, length=4, partitions=32):
             "src_pos",
             "tgt_pos",
         )
-    ).repartition(partitions)
+    )
+
+
+def transform_into_transformer_predict_pairs(df, length=4):
+    def slice_src(field, length):
+        return F.when(F.col("n") <= length, F.col(field)).otherwise(
+            F.slice(F.col(field), -length, length)
+        )
+
+    return (
+        features_age_list(df)
+        .withColumn("src", slice_src("features_list", length))
+        .withColumn("src_pos", slice_src("age_days_list", length))
+        # measure the length before creating a mask and padding
+        .withColumn("k_src", F.size("src"))
+        .withColumn(
+            "src", pad_src("src", F.array_repeat(F.lit(0.0), F.col("dim")), length)
+        )
+        .withColumn("src_pos", pad_src("src_pos", F.lit(0), length))
+        .withColumn(
+            "src_key_padding_mask",
+            F.concat(
+                F.array_repeat(F.lit(1), F.lit(length) - F.col("k_src")),
+                F.array_repeat(F.lit(0), F.col("k_src")),
+            ),
+        )
+        .withColumn("src", F.flatten("src"))
+        .select(
+            "customer_ID",
+            "src",
+            "src_key_padding_mask",
+            "src_pos",
+        )
+    )
 
 
 class PetastormDataModule(pl.LightningDataModule):
@@ -211,7 +202,7 @@ class PetastormDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
-        _, train_df, val_df = read_train_data(
+        df, train_df, val_df = read_train_data(
             self.spark,
             Path(self.train_data_preprocessed_path).as_posix(),
             self.train_ratio,
@@ -244,6 +235,13 @@ class PetastormDataModule(pl.LightningDataModule):
         for batch in self._dataloader(self.converter_val):
             yield batch
 
+    def predict_dataloader(self):
+        if self.converter_predict:
+            for batch in self._dataloader(self.converter_predict):
+                yield batch
+        else:
+            raise Exception("No converter for predict")
+
 
 class PetastormTransformerDataModule(PetastormDataModule):
     def __init__(
@@ -261,7 +259,7 @@ class PetastormTransformerDataModule(PetastormDataModule):
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
-        _, train_df, val_df = read_train_data(
+        full_df, train_df, val_df = read_train_data(
             self.spark,
             Path(self.train_data_preprocessed_path).as_posix(),
             self.train_ratio,
@@ -280,13 +278,13 @@ class PetastormTransformerDataModule(PetastormDataModule):
                 "features", F.col("features_pca")
             )
 
-        def make_converter(df):
+        def make_train_converter(df):
             return make_spark_converter(
                 transform_into_transformer_pairs(
                     df,
                     self.subsequence_length,
-                    partitions=self.num_partitions,
-                ).select(
+                )
+                .select(
                     "src",
                     "tgt",
                     "src_key_padding_mask",
@@ -294,7 +292,13 @@ class PetastormTransformerDataModule(PetastormDataModule):
                     "src_pos",
                     "tgt_pos",
                 )
+                .repartition(self.num_partitions)
             )
 
-        self.converter_train = make_converter(train_df)
-        self.converter_val = make_converter(val_df)
+        self.converter_train = make_train_converter(train_df)
+        self.converter_val = make_train_converter(val_df)
+        self.converter_predict = make_spark_converter(
+            transform_into_transformer_predict_pairs(full_df, self.subsequence_length)
+            .select("src", "src_key_padding_mask", "src_pos")
+            .repartition(self.num_partitions)
+        )

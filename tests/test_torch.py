@@ -11,9 +11,9 @@ from pyspark.sql import functions as F
 from amex_default_prediction.torch.data_module import (
     PetastormDataModule,
     PetastormTransformerDataModule,
-    create_transformer_pair,
     get_spark_feature_size,
     transform_into_transformer_pairs,
+    transform_into_transformer_predict_pairs,
 )
 from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
 
@@ -87,22 +87,7 @@ def synthetic_transformer_train_df_path(
     yield output
 
 
-def test_test_create_transformer_pair(synthetic_transformer_train_pdf):
-    pdf = synthetic_transformer_train_pdf
-    for key in pdf.customer_ID.unique():
-        length = 4
-        res = create_transformer_pair(pdf[pdf.customer_ID == key], length)
-        assert res.shape[0] == 1
-        print(res)
-        row = res.iloc[0]
-        assert len(row.src) > 0
-        assert len(row.src[0]) == 8
-        assert len(row.tgt) > 0
-        assert len(row.src_key_padding_mask) == length
-        assert len(row.tgt_key_padding_mask) == length
-
-
-def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
+def test_transform_into_transformer_pairs(spark, synthetic_transformer_train_pdf):
     df = (
         transform_into_transformer_pairs(
             spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
@@ -135,6 +120,28 @@ def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
 
     assert (pdf.precondition != 8).sum() == 0
     df.unpersist()
+
+
+def test_transform_into_transformer_predict_pairs(
+    spark, synthetic_transformer_train_pdf
+):
+    df = (
+        transform_into_transformer_predict_pairs(
+            spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+                "features", mlF.array_to_vector("features")
+            ),
+            length=4,
+        ).repartition(1)
+    ).cache()
+    df.printSchema()
+
+    df.show(vertical=True, truncate=80)
+    assert df.count() == 40
+    assert df.columns == ["customer_ID", "src", "src_key_padding_mask", "src_pos"]
+
+    for k, v in [["src", 8 * 4], ["src_key_padding_mask", 4], ["src_pos", 4]]:
+        pdf = df.select((F.size(k)).alias("precondition")).toPandas()
+        assert (pdf.precondition != v).sum() == 0
 
 
 def test_petastorm_transformer_data_module_has_fields(
@@ -187,7 +194,13 @@ def test_transformer_trainer_accepts_petastorm_transformer_data_module(
         synthetic_transformer_train_df_path,
         batch_size=batch_size,
         subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
     )
     trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
     model = TransformerModel(d_model=8)
     trainer.fit(model, datamodule=data_module)
+
+    predictions = trainer.predict(model, datamodule=data_module)
+    assert len(predictions) == 1
+    assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])

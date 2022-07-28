@@ -178,3 +178,17 @@ class TransformerModel(pl.LightningModule):
         loss = self._step(val_batch)
         self.log("val_loss", loss)
         return loss
+
+    def predict_step(self, batch, batch_id):
+        x, src_key_padding_mask, src_pos = (
+            batch["src"],
+            batch["src_key_padding_mask"],
+            batch["src_pos"],
+        )
+        x = x.view(x.shape[0], -1, self.d_model).transpose(0, 1)
+        # this is a bit ugly, could be cleaned up a bit to match the _step function
+        z = self.transformer.encoder(
+            self.pos_encoder(x, src_pos.transpose(0, 1)),
+            src_key_padding_mask=src_key_padding_mask.type(torch.bool),
+        )
+        return z
