@@ -22,11 +22,11 @@ resource "google_container_registry" "registry" {
 }
 
 resource "google_project_service" "services" {
-    for_each = toset(["containerregistry"])
-    service = "${each.key}.googleapis.com"
+  for_each = toset(["containerregistry"])
+  service  = "${each.key}.googleapis.com"
 }
 
 resource "google_storage_bucket" "data" {
-    name = "${local.project_id}-data"
-    location = "US"
+  name     = "${local.project_id}-data"
+  location = "US"
 }
