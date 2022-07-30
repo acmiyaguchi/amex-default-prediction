@@ -22,11 +22,18 @@ resource "google_container_registry" "registry" {
 }
 
 resource "google_project_service" "services" {
-  for_each = toset(["containerregistry"])
+  for_each = toset(["artifactregistry"])
   service  = "${each.key}.googleapis.com"
 }
 
 resource "google_storage_bucket" "data" {
   name     = "${local.project_id}-data"
   location = "US"
+}
+
+resource "google_artifact_registry_repository" "default" {
+  location      = local.region
+  repository_id = local.project_id
+  format        = "DOCKER"
+  depends_on    = [google_project_service.services["artifactregistry"]]
 }
