@@ -204,3 +204,10 @@ def test_transformer_trainer_accepts_petastorm_transformer_data_module(
     predictions = trainer.predict(model, datamodule=data_module)
     assert len(predictions) == 1
     assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])
+
+    for batch_idx, batch in enumerate(data_module.predict_dataloader()):
+        cidx = batch["customer_index"].cpu().detach().numpy()
+        z = model.predict_step(batch, batch_idx).cpu().detach().numpy()
+        df = pd.DataFrame(zip(cidx, z[0]), columns=["customer_index", "prediction"])
+        assert df.shape == (batch_size, 2)
+        break

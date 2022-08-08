@@ -15,7 +15,7 @@ def main(model_name):
     output = intermediate_root / "models" / model_name / unique_name()
     dataset = (
         "test_data_preprocessed_v4"
-        if "transformer" in model_name
+        if "torch-transformer" == model_name
         else "train_data_preprocessed_v4"
     )
     spark_driver_memory = "20g"
@@ -34,6 +34,21 @@ def main(model_name):
                         ).as_posix()
                     ]
                     if "transformer" in model_name
+                    else []
+                ),
+                *(
+                    [
+                        (
+                            intermediate_root
+                            / (
+                                "models/torch-transformer/"
+                                "20220725054744-0.16.2-6d73fff/"
+                                "lightning_logs_amex-default-prediction/0_21aakrzj/"
+                                "checkpoints/epoch=8-step=1656.ckpt"
+                            )
+                        ).as_posix()
+                    ]
+                    if "torch-transform-transformer" == model_name
                     else []
                 ),
                 output.as_posix(),

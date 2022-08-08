@@ -153,6 +153,7 @@ def transform_into_transformer_predict_pairs(df, length=4):
 
     return (
         features_age_list(df)
+        .where("n >= 1")
         .withColumn("src", slice_src("features_list", length))
         .withColumn("src_pos", slice_src("age_days_list", length))
         # measure the length before creating a mask and padding
@@ -271,12 +272,10 @@ class PetastormTransformerDataModule(PetastormDataModule):
 
         if self.pca_model_path:
             pca_model = PipelineModel.read().load(self.pca_model_path)
-            train_df = pca_model.transform(train_df).withColumn(
-                "features", F.col("features_pca")
-            )
-            val_df = pca_model.transform(val_df).withColumn(
-                "features", F.col("features_pca")
-            )
+            train_df, val_df, full_df = [
+                pca_model.transform(df).withColumn("features", F.col("features_pca"))
+                for df in [train_df, val_df, full_df]
+            ]
 
         def make_train_converter(df):
             return make_spark_converter(
@@ -299,6 +298,13 @@ class PetastormTransformerDataModule(PetastormDataModule):
         self.converter_val = make_train_converter(val_df)
         self.converter_predict = make_spark_converter(
             transform_into_transformer_predict_pairs(full_df, self.subsequence_length)
-            .select("src", "src_key_padding_mask", "src_pos")
+            .select(
+                "src",
+                "src_key_padding_mask",
+                "src_pos",
+                F.row_number()
+                .over(Window.orderBy("customer_ID"))
+                .alias("customer_index"),
+            )
             .repartition(self.num_partitions)
         )

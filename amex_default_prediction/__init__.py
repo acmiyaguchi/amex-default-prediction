@@ -23,11 +23,12 @@ fit.add_command(logistic.fit_with_aft, "logistic-with-aft")
 fit.add_command(logistic.fit_with_pca, "logistic-with-pca")
 fit.add_command(gbt.fit_with_aft, "gbt-with-aft")
 fit.add_command(gbt.fit_with_pca, "gbt-with-pca")
-fit.add_command(nn.fit_transformer, "nn-transformer")
 fit.add_command(nn.fit, "nn")
 fit.add_command(pca.fit, "pca")
 fit.add_command(cmd.fit_strawman, "torch-strawman")
 fit.add_command(cmd.fit_transformer, "torch-transformer")
+# TODO: put this in a better place
+fit.add_command(cmd.transform_transformer, "torch-transform-transformer")
 
 
 for command in [transform_group, fit, plot]:
