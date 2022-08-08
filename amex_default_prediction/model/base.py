@@ -15,6 +15,7 @@ from pyspark.ml.param.shared import (
 from pyspark.ml.pipeline import Transformer
 from pyspark.ml.tuning import CrossValidator, CrossValidatorModel
 from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
+from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 from amex_default_prediction.evaluation import AmexMetricEvaluator
@@ -307,5 +308,69 @@ def fit_simple_with_pca(
         evaluator,
         train_data_preprocessed_path,
         output_path,
+        **kwargs,
+    )
+
+
+def fit_simple_with_transformer(
+    spark,
+    model,
+    grid,
+    train_data_preprocessed_path,
+    train_transformer_path,
+    output_path,
+    parallelism=4,
+    **kwargs,
+):
+    def read_func(spark, train_data_preprocessed_path, train_ratio, *args, **kwargs):
+        transformer_df = spark.read.parquet(train_transformer_path)
+        df, _, _ = read_train_data(
+            spark, train_data_preprocessed_path, train_ratio, *args, **kwargs
+        )
+        df = (
+            df.withColumn(
+                "customer_index",
+                F.row_number().over(Window.orderBy("customer_ID")),
+            )
+            .join(transformer_df, on="customer_index", how="inner")
+            .withColumn("features", array_to_vector("prediction"))
+            .repartition(spark.sparkContext.defaultParallelism * 2)
+            .cache()
+        )
+        return (
+            df,
+            df.where(f"sample_id < {train_ratio*100}"),
+            df.where(f"sample_id >= {train_ratio*100}"),
+        )
+
+    evaluator = AmexMetricEvaluator(predictionCol="pred", labelCol="label")
+    fit_generic(
+        spark,
+        CrossValidator(
+            estimator=Pipeline(
+                stages=[
+                    SQLTransformer(
+                        statement="""
+                        SELECT
+                            customer_ID,
+                            features,
+                            label
+                        FROM __THIS__
+                    """
+                    ),
+                    model,
+                    ExtractVectorIndexTransformer(
+                        inputCol="probability", outputCol="pred", indexCol=1
+                    ),
+                ]
+            ),
+            estimatorParamMaps=grid,
+            evaluator=evaluator,
+            parallelism=parallelism,
+        ),
+        evaluator,
+        train_data_preprocessed_path,
+        output_path,
+        read_func=read_func,
         **kwargs,
     )
