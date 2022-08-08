@@ -22,6 +22,9 @@ setuptools.setup(
         "wandb",
         "pytorch-lightning",
         "torch-summary",
+        "scikit-learn",
+        "umap-learn[plot]",
+        "pynndescent",
         'importlib-metadata>=0.12;python_version<"3.8"',
     ],
 )

@@ -43,7 +43,14 @@ beautifulsoup4==4.11.1
 black==22.6.0
     # via nb-black
 bleach==5.0.1
-    # via nbconvert
+    # via
+    #   nbconvert
+    #   panel
+bokeh==2.4.3
+    # via
+    #   dask
+    #   panel
+    #   umap-learn
 cachetools==5.2.0
     # via google-auth
 certifi==2022.6.15
@@ -62,16 +69,34 @@ click==8.1.3
     # via
     #   amex-default-prediction
     #   black
+    #   distributed
     #   flask
     #   wandb
+cloudpickle==2.1.0
+    # via
+    #   dask
+    #   distributed
 colorama==0.4.5
     # via
     #   click
     #   ipython
     #   pytest
     #   tqdm
+colorcet==3.0.0
+    # via
+    #   datashader
+    #   holoviews
+    #   umap-learn
 cycler==0.11.0
     # via matplotlib
+dask[complete]==2022.8.0
+    # via
+    #   datashader
+    #   distributed
+datashader==0.14.1
+    # via umap-learn
+datashape==0.5.2
+    # via datashader
 debugpy==1.6.2
     # via ipykernel
 decorator==5.1.1
@@ -86,6 +111,8 @@ diskcache==5.4.0
     # via petastorm
 distlib==0.3.5
     # via virtualenv
+distributed==2022.8.0
+    # via dask
 docker-pycreds==0.4.0
     # via wandb
 entrypoints==0.4
@@ -108,6 +135,7 @@ frozenlist==1.3.0
     #   aiosignal
 fsspec[http]==2022.5.0
     # via
+    #   dask
     #   petastorm
     #   pytorch-lightning
 future==0.18.2
@@ -124,6 +152,10 @@ google-auth-oauthlib==0.4.6
     # via tensorboard
 grpcio==1.47.0
     # via tensorboard
+heapdict==1.0.1
+    # via zict
+holoviews==1.15.0
+    # via umap-learn
 identify==2.5.2
     # via pre-commit
 idna==3.3
@@ -131,6 +163,8 @@ idna==3.3
     #   anyio
     #   requests
     #   yarl
+imageio==2.21.0
+    # via scikit-image
 importlib-metadata==4.12.0
     # via
     #   flask
@@ -157,6 +191,9 @@ jedi==0.18.1
     # via ipython
 jinja2==3.1.2
     # via
+    #   bokeh
+    #   dask
+    #   distributed
     #   flask
     #   jupyter-server
     #   jupyterlab
@@ -164,6 +201,10 @@ jinja2==3.1.2
     #   nbclassic
     #   nbconvert
     #   notebook
+joblib==1.1.0
+    # via
+    #   pynndescent
+    #   scikit-learn
 json5==0.9.8
     # via jupyterlab-server
 jsonschema==4.7.2
@@ -200,24 +241,41 @@ jupyterlab-server==2.15.0
     # via jupyterlab
 kiwisolver==1.4.4
     # via matplotlib
+llvmlite==0.39.0
+    # via
+    #   numba
+    #   pynndescent
+locket==1.0.0
+    # via
+    #   distributed
+    #   partd
 markdown==3.4.1
-    # via tensorboard
+    # via
+    #   panel
+    #   tensorboard
 markupsafe==2.1.1
     # via
     #   jinja2
     #   nbconvert
 matplotlib==3.5.2
-    # via amex-default-prediction
+    # via
+    #   amex-default-prediction
+    #   seaborn
+    #   umap-learn
 matplotlib-inline==0.1.3
     # via
     #   ipykernel
     #   ipython
 mistune==0.8.4
     # via nbconvert
+msgpack==1.0.4
+    # via distributed
 multidict==6.0.2
     # via
     #   aiohttp
     #   yarl
+multipledispatch==0.6.0
+    # via datashape
 mypy-extensions==0.4.3
     # via black
 nb-black==1.0.7
@@ -245,27 +303,53 @@ nest-asyncio==1.5.5
     #   nbclassic
     #   nbclient
     #   notebook
+networkx==2.8.5
+    # via scikit-image
 nodeenv==1.7.0
     # via pre-commit
 notebook==6.4.12
     # via jupyterlab
 notebook-shim==0.1.0
     # via nbclassic
-numpy==1.23.1
+numba==0.56.0
+    # via
+    #   datashader
+    #   pynndescent
+    #   umap-learn
+numpy==1.22.4
     # via
     #   amex-default-prediction
+    #   bokeh
+    #   dask
+    #   datashader
+    #   datashape
+    #   holoviews
+    #   imageio
     #   matplotlib
+    #   numba
     #   pandas
     #   petastorm
     #   pyarrow
     #   pytorch-lightning
+    #   pywavelets
+    #   scikit-image
+    #   scikit-learn
+    #   scipy
+    #   seaborn
     #   tensorboard
+    #   tifffile
     #   torchmetrics
     #   torchvision
+    #   umap-learn
+    #   xarray
 oauthlib==3.2.0
     # via requests-oauthlib
 packaging==21.3
     # via
+    #   bokeh
+    #   dask
+    #   distributed
+    #   holoviews
     #   ipykernel
     #   jupyter-server
     #   jupyterlab
@@ -275,15 +359,35 @@ packaging==21.3
     #   petastorm
     #   pytest
     #   pytorch-lightning
+    #   scikit-image
     #   torchmetrics
+    #   xarray
 pandas==1.4.3
     # via
     #   amex-default-prediction
+    #   dask
+    #   datashader
+    #   holoviews
     #   petastorm
+    #   seaborn
+    #   umap-learn
+    #   xarray
 pandocfilters==1.5.0
     # via nbconvert
+panel==0.13.1
+    # via holoviews
+param==1.12.2
+    # via
+    #   colorcet
+    #   datashader
+    #   holoviews
+    #   panel
+    #   pyct
+    #   pyviz-comms
 parso==0.8.3
     # via jedi
+partd==1.2.0
+    # via dask
 pathspec==0.9.0
     # via black
 pathtools==0.1.2
@@ -294,7 +398,11 @@ pickleshare==0.7.5
     # via ipython
 pillow==9.2.0
     # via
+    #   bokeh
+    #   datashader
+    #   imageio
     #   matplotlib
+    #   scikit-image
     #   torchvision
 platformdirs==2.5.2
     # via
@@ -320,6 +428,7 @@ protobuf==3.19.4
     #   wandb
 psutil==5.9.1
     # via
+    #   distributed
     #   ipykernel
     #   petastorm
     #   wandb
@@ -341,12 +450,21 @@ pyasn1-modules==0.2.8
     # via google-auth
 pycparser==2.21
     # via cffi
+pyct==0.4.8
+    # via
+    #   colorcet
+    #   datashader
+    #   panel
 pydeprecate==0.3.2
     # via pytorch-lightning
 pygments==2.12.0
     # via
     #   ipython
     #   nbconvert
+pynndescent==0.5.7
+    # via
+    #   amex-default-prediction
+    #   umap-learn
 pyparsing==3.0.9
     # via
     #   matplotlib
@@ -361,6 +479,7 @@ pytest==7.1.2
     # via -r requirements.in
 python-dateutil==2.8.2
     # via
+    #   datashape
     #   jupyter-client
     #   matplotlib
     #   pandas
@@ -370,6 +489,12 @@ pytz==2022.1
     # via
     #   babel
     #   pandas
+pyviz-comms==2.2.0
+    # via
+    #   holoviews
+    #   panel
+pywavelets==1.3.0
+    # via scikit-image
 pywin32==304
     # via jupyter-core
 pywinpty==2.0.6
@@ -378,6 +503,9 @@ pywinpty==2.0.6
     #   terminado
 pyyaml==6.0
     # via
+    #   bokeh
+    #   dask
+    #   distributed
     #   pre-commit
     #   pytorch-lightning
     #   wandb
@@ -393,6 +521,7 @@ requests==2.28.1
     # via
     #   fsspec
     #   jupyterlab-server
+    #   panel
     #   requests-oauthlib
     #   sparktorch
     #   tensorboard
@@ -402,6 +531,23 @@ requests-oauthlib==1.3.1
     # via google-auth-oauthlib
 rsa==4.9
     # via google-auth
+scikit-image==0.19.3
+    # via umap-learn
+scikit-learn==1.1.2
+    # via
+    #   amex-default-prediction
+    #   pynndescent
+    #   umap-learn
+scipy==1.9.0
+    # via
+    #   datashader
+    #   pynndescent
+    #   scikit-image
+    #   scikit-learn
+    #   seaborn
+    #   umap-learn
+seaborn==0.11.2
+    # via umap-learn
 send2trash==1.8.0
     # via
     #   jupyter-server
@@ -420,6 +566,7 @@ six==1.16.0
     #   docker-pycreds
     #   google-auth
     #   grpcio
+    #   multipledispatch
     #   petastorm
     #   promise
     #   python-dateutil
@@ -429,12 +576,16 @@ smmap==5.0.0
     # via gitdb
 sniffio==1.2.0
     # via anyio
+sortedcontainers==2.4.0
+    # via distributed
 soupsieve==2.3.2.post1
     # via beautifulsoup4
 sparktorch==0.1.2
     # via amex-default-prediction
 stack-data==0.3.0
     # via ipython
+tblib==1.7.0
+    # via distributed
 tensorboard==2.9.1
     # via pytorch-lightning
 tensorboard-data-server==0.6.1
@@ -446,6 +597,10 @@ terminado==0.15.0
     #   jupyter-server
     #   nbclassic
     #   notebook
+threadpoolctl==3.1.0
+    # via scikit-learn
+tifffile==2022.8.3
+    # via scikit-image
 tinycss2==1.1.1
     # via nbconvert
 toml==0.10.2
@@ -454,6 +609,11 @@ tomli==2.0.1
     # via
     #   black
     #   pytest
+toolz==0.12.0
+    # via
+    #   dask
+    #   distributed
+    #   partd
 torch==1.12.0+cu113
     # via
     #   -r requirements.in
@@ -469,8 +629,10 @@ torchmetrics==0.9.2
     # via pytorch-lightning
 torchvision==0.13.0+cu113
     # via petastorm
-tornado==6.2
+tornado==6.1
     # via
+    #   bokeh
+    #   distributed
     #   ipykernel
     #   jupyter-client
     #   jupyter-server
@@ -481,7 +643,9 @@ tornado==6.2
 tqdm==4.64.0
     # via
     #   amex-default-prediction
+    #   panel
     #   pytorch-lightning
+    #   umap-learn
 traitlets==5.3.0
     # via
     #   ipykernel
@@ -498,11 +662,16 @@ traitlets==5.3.0
 typing-extensions==4.3.0
     # via
     #   black
+    #   bokeh
+    #   panel
     #   pytorch-lightning
     #   torch
     #   torchvision
+umap-learn[plot]==0.5.3
+    # via amex-default-prediction
 urllib3==1.26.10
     # via
+    #   distributed
     #   requests
     #   sentry-sdk
 virtualenv==20.15.1
@@ -523,8 +692,12 @@ werkzeug==2.1.2
     #   tensorboard
 wheel==0.37.1
     # via tensorboard
+xarray==2022.6.0
+    # via datashader
 yarl==1.7.2
     # via aiohttp
+zict==2.2.0
+    # via distributed
 zipp==3.8.1
     # via importlib-metadata
 
