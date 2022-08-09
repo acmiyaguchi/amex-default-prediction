@@ -1,12 +1,15 @@
 from pathlib import Path
+from typing import Iterator, Tuple
 
 import numpy as np
 import pandas as pd
+import torch
 from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.feature import SQLTransformer, VectorAssembler
 from pyspark.ml.functions import array_to_vector, vector_to_array
 from pyspark.ml.param.shared import (
     HasInputCol,
+    HasNumFeatures,
     HasOutputCol,
     Param,
     Params,
@@ -19,6 +22,12 @@ from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 from amex_default_prediction.evaluation import AmexMetricEvaluator
+from amex_default_prediction.torch.net import TransformerModel
+from amex_default_prediction.torch.transform import (
+    transform_into_transformer_predict_pairs,
+)
+
+from ..utils import spark_session
 
 
 class HasIndexCol(Params):
@@ -41,6 +50,36 @@ class HasIndexCol(Params):
         Gets the value of indexCol or its default value.
         """
         return self.getOrDefault(self.indexCol)
+
+
+class HasCheckpointPath(Params):
+    checkpointPath: "Param[str]" = Param(
+        Params._dummy(),
+        "checkpointPath",
+        "checkpoint path",
+        typeConverter=TypeConverters.toString,
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def getCheckpointPath(self) -> str:
+        return self.getOrDefault(self.checkpointPath)
+
+
+class HasSequenceLength(Params):
+    sequenceLength: "Param[int]" = Param(
+        Params._dummy(),
+        "sequenceLength",
+        "sequence length",
+        typeConverter=TypeConverters.toInt,
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def getSequenceLength(self) -> int:
+        return self.getOrDefault(self.sequenceLength)
 
 
 class ExtractVectorIndexTransformer(
@@ -93,6 +132,94 @@ class LogFeatureTransformer(
             self.getOutputCol(),
             array_to_vector(log_features(vector_to_array(self.getInputCol()))),
         )
+
+
+from pytorch_lightning.utilities.memory import get_model_size_mb
+
+
+class TransformerInferenceTransformer(
+    Transformer,
+    HasInputCol,
+    HasCheckpointPath,
+    HasNumFeatures,
+    HasSequenceLength,
+    HasOutputCol,
+    DefaultParamsWritable,
+    DefaultParamsReadable,
+):
+    def __init__(
+        self,
+        inputCol="features",
+        checkpointPath="checkpoint",
+        sequenceLength=8,
+        numFeatures=128,
+        outputCol="prediction",
+    ):
+        super().__init__()
+        self._setDefault(
+            inputCol=inputCol,
+            checkpointPath=checkpointPath,
+            sequenceLength=sequenceLength,
+            numFeatures=numFeatures,
+            outputCol=outputCol,
+        )
+
+    def _transform(self, dataset):
+        """https://docs.databricks.com/_static/notebooks/deep-learning/pytorch-images.html"""
+
+        # bc = spark_session().sparkContext.broadcast(net.state_dict())
+
+        @F.pandas_udf("float")
+        def predict_batch_udf(
+            it: Iterator[Tuple[pd.Series, pd.Series, pd.Series]]
+        ) -> Iterator[pd.Series]:
+            model = TransformerModel.load_from_checkpoint(
+                self.getCheckpointPath(), d_model=self.getNumFeatures()
+            )
+            for src, src_key_padding_mask, src_pos in it:
+                # model = TransformerModel.load_state_dict(bc.value).to(device)
+                # print(src.shape)
+                # value = {
+                #     "src": torch.from_numpy(np.stack(src.values))
+                #     .float()
+                #     .to(device),
+                #     "src_key_padding_mask": (
+                #         torch.from_numpy(np.stack(src_key_padding_mask.values)).to(
+                #             device
+                #         )
+                #     ),
+                #     "src_pos": (
+                #         torch.from_numpy(np.stack(src_pos.values)).to(device)
+                #     ),
+                # }
+                # try:
+                #     z = model.predict_step(value, 0).cpu().detach().numpy()
+                # except Exception as e:
+                #     print(e, flush=True)
+                #     raise e
+                # res = pd.Series([x.tobytes() for x in z[0]])
+                # res = pd.Series([float(x[0]) for x in z[0]])
+                res = pd.Series([0.0 for _ in range(src.shape[0])])
+                print(res, flush=True)
+                yield res
+
+        # @F.udf("array<float>")
+        # def bytes_to_array(data: bytes):
+        #     return np.frombuffer(data, dtype=np.float32)
+
+        transformed = transform_into_transformer_predict_pairs(
+            dataset.select("customer_ID", "age_days", "features"),
+            length=self.getSequenceLength(),
+        ).select(
+            "customer_ID",
+            predict_batch_udf(
+                F.col("src"),
+                F.col("src_key_padding_mask"),
+                F.col("src_pos"),
+            ).alias(self.getOutputCol()),
+        )
+
+        return dataset.join(transformed, on="customer_ID")
 
 
 def read_train_data(

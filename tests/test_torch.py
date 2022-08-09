@@ -8,14 +8,17 @@ import torch
 from pyspark.ml import functions as mlF
 from pyspark.sql import functions as F
 
+from amex_default_prediction.model.base import TransformerInferenceTransformer
 from amex_default_prediction.torch.data_module import (
     PetastormDataModule,
     PetastormTransformerDataModule,
     get_spark_feature_size,
+)
+from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
+from amex_default_prediction.torch.transform import (
     transform_into_transformer_pairs,
     transform_into_transformer_predict_pairs,
 )
-from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
 
 
 def test_get_parquet_feature_size(spark, synthetic_train_data_path):
@@ -209,5 +212,94 @@ def test_transformer_trainer_accepts_petastorm_transformer_data_module(
         cidx = batch["customer_index"].cpu().detach().numpy()
         z = model.predict_step(batch, batch_idx).cpu().detach().numpy()
         df = pd.DataFrame(zip(cidx, z[0]), columns=["customer_index", "prediction"])
+        series = pd.Series(list(z[0]))
+        print(series)
         assert df.shape == (batch_size, 2)
         break
+
+
+def test_transformer_with_manual_tensor_creation(
+    spark, synthetic_transformer_train_df_path, synthetic_transformer_train_pdf
+):
+    batch_size = 10
+    subsequence_length = 4
+    data_module = PetastormTransformerDataModule(
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
+    )
+    trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
+    model = TransformerModel(d_model=8)
+    trainer.fit(model, datamodule=data_module)
+
+    predictions = trainer.predict(model, datamodule=data_module)
+    assert len(predictions) == 1
+    assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])
+
+    df = (
+        transform_into_transformer_predict_pairs(
+            spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+                "features", mlF.array_to_vector("features")
+            ),
+            length=4,
+        )
+        .limit(10)
+        .toPandas()
+    )
+    batch = {
+        "src": torch.from_numpy(np.stack(df.src.values)).float(),
+        "src_key_padding_mask": torch.from_numpy(
+            np.stack(df.src_key_padding_mask.values)
+        ),
+        "src_pos": torch.from_numpy(np.stack(df.src_pos.values)),
+    }
+    z = model.predict_step(batch, 0).cpu().detach().numpy()
+    series = pd.Series([list(x) for x in z[0]])
+    print(series)
+
+
+def test_transformer_inference_transformer(
+    spark,
+    synthetic_transformer_train_df_path,
+    synthetic_transformer_train_pdf,
+    tmp_path,
+):
+    batch_size = 10
+    subsequence_length = 4
+    data_module = PetastormTransformerDataModule(
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
+    )
+    trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
+    model = TransformerModel(d_model=8)
+    trainer.fit(model, datamodule=data_module)
+
+    model_checkpoint = tmp_path / "model.ckpt"
+    trainer.save_checkpoint(model_checkpoint.as_posix())
+
+    transformer_model = TransformerInferenceTransformer(
+        inputCol="features",
+        checkpointPath=model_checkpoint.as_posix(),
+        sequenceLength=subsequence_length,
+        numFeatures=8,
+    )
+    print(transformer_model)
+
+    res = transformer_model.transform(
+        spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+            "features", mlF.array_to_vector("features")
+        )
+    )
+    res.printSchema()
+    assert "prediction" in res.columns
+    res.show(vertical=True, truncate=80, n=2)
+    assert res.count() > 40

@@ -15,7 +15,7 @@ setuptools.setup(
         "click",
         "tqdm",
         "pyarrow",
-        "pyspark",
+        "pyspark[sql]",
         "torch",
         "sparktorch",
         "petastorm[torch]",

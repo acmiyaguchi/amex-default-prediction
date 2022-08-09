@@ -23,13 +23,13 @@ argon2-cffi==21.3.0
     #   notebook
 argon2-cffi-bindings==21.2.0
     # via argon2-cffi
-asttokens==2.0.5
+asttokens==2.0.7
     # via stack-data
 async-timeout==4.0.2
     # via aiohttp
 atomicwrites==1.4.1
     # via pytest
-attrs==21.4.0
+attrs==22.1.0
     # via
     #   aiohttp
     #   jsonschema
@@ -119,21 +119,21 @@ entrypoints==0.4
     # via
     #   jupyter-client
     #   nbconvert
-executing==0.8.3
+executing==0.9.1
     # via stack-data
 fastjsonschema==2.16.1
     # via nbformat
 filelock==3.7.1
     # via virtualenv
-flask==2.1.3
+flask==2.2.1
     # via sparktorch
 fonttools==4.34.4
     # via matplotlib
-frozenlist==1.3.0
+frozenlist==1.3.1
     # via
     #   aiohttp
     #   aiosignal
-fsspec[http]==2022.5.0
+fsspec[http]==2022.7.1
     # via
     #   dask
     #   petastorm
@@ -144,7 +144,7 @@ gitdb==4.0.9
     # via gitpython
 gitpython==3.1.27
     # via wandb
-google-auth==2.9.1
+google-auth==2.10.0
     # via
     #   google-auth-oauthlib
     #   tensorboard
@@ -156,14 +156,14 @@ heapdict==1.0.1
     # via zict
 holoviews==1.15.0
     # via umap-learn
-identify==2.5.2
+identify==2.5.3
     # via pre-commit
 idna==3.3
     # via
     #   anyio
     #   requests
     #   yarl
-imageio==2.21.0
+imageio==2.21.1
     # via scikit-image
 importlib-metadata==4.12.0
     # via
@@ -205,9 +205,9 @@ joblib==1.1.0
     # via
     #   pynndescent
     #   scikit-learn
-json5==0.9.8
+json5==0.9.9
     # via jupyterlab-server
-jsonschema==4.7.2
+jsonschema==4.9.1
     # via
     #   jupyterlab-server
     #   nbformat
@@ -257,6 +257,7 @@ markupsafe==2.1.1
     # via
     #   jinja2
     #   nbconvert
+    #   werkzeug
 matplotlib==3.5.2
     # via
     #   amex-default-prediction
@@ -369,6 +370,7 @@ pandas==1.4.3
     #   datashader
     #   holoviews
     #   petastorm
+    #   pyspark
     #   seaborn
     #   umap-learn
     #   xarray
@@ -392,7 +394,7 @@ pathspec==0.9.0
     # via black
 pathtools==0.1.2
     # via wandb
-petastorm[torch]==0.11.4
+petastorm[torch]==0.11.5
     # via amex-default-prediction
 pickleshare==0.7.5
     # via ipython
@@ -423,7 +425,6 @@ prompt-toolkit==3.0.30
     # via ipython
 protobuf==3.19.4
     # via
-    #   pytorch-lightning
     #   tensorboard
     #   wandb
 psutil==5.9.1
@@ -438,10 +439,11 @@ py==1.11.0
     # via pytest
 py4j==0.10.9.5
     # via pyspark
-pyarrow==8.0.0
+pyarrow==9.0.0
     # via
     #   amex-default-prediction
     #   petastorm
+    #   pyspark
 pyasn1==0.4.8
     # via
     #   pyasn1-modules
@@ -471,7 +473,7 @@ pyparsing==3.0.9
     #   packaging
 pyrsistent==0.18.1
     # via jsonschema
-pyspark==3.3.0
+pyspark[sql]==3.3.0
     # via
     #   amex-default-prediction
     #   petastorm
@@ -483,7 +485,7 @@ python-dateutil==2.8.2
     #   jupyter-client
     #   matplotlib
     #   pandas
-pytorch-lightning==1.6.5
+pytorch-lightning==1.7.0
     # via amex-default-prediction
 pytz==2022.1
     # via
@@ -497,7 +499,7 @@ pywavelets==1.3.0
     # via scikit-image
 pywin32==304
     # via jupyter-core
-pywinpty==2.0.6
+pywinpty==2.0.7
     # via
     #   jupyter-server
     #   terminado
@@ -553,9 +555,9 @@ send2trash==1.8.0
     #   jupyter-server
     #   nbclassic
     #   notebook
-sentry-sdk==1.8.0
+sentry-sdk==1.9.2
     # via wandb
-setproctitle==1.2.3
+setproctitle==1.3.1
     # via wandb
 shortuuid==1.0.9
     # via wandb
@@ -570,7 +572,6 @@ six==1.16.0
     #   petastorm
     #   promise
     #   python-dateutil
-    #   virtualenv
     #   wandb
 smmap==5.0.0
     # via gitdb
@@ -599,7 +600,7 @@ terminado==0.15.0
     #   notebook
 threadpoolctl==3.1.0
     # via scikit-learn
-tifffile==2022.8.3
+tifffile==2022.8.8
     # via scikit-image
 tinycss2==1.1.1
     # via nbconvert
@@ -614,7 +615,7 @@ toolz==0.12.0
     #   dask
     #   distributed
     #   partd
-torch==1.12.0+cu113
+torch==1.12.1+cu113
     # via
     #   -r requirements.in
     #   amex-default-prediction
@@ -625,9 +626,9 @@ torch==1.12.0+cu113
     #   torchvision
 torch-summary==1.4.5
     # via amex-default-prediction
-torchmetrics==0.9.2
+torchmetrics==0.9.3
     # via pytorch-lightning
-torchvision==0.13.0+cu113
+torchvision==0.13.1+cu113
     # via petastorm
 tornado==6.1
     # via
@@ -669,14 +670,14 @@ typing-extensions==4.3.0
     #   torchvision
 umap-learn[plot]==0.5.3
     # via amex-default-prediction
-urllib3==1.26.10
+urllib3==1.26.11
     # via
     #   distributed
     #   requests
     #   sentry-sdk
-virtualenv==20.15.1
+virtualenv==20.16.3
     # via pre-commit
-wandb==0.12.21
+wandb==0.13.1
     # via amex-default-prediction
 wcwidth==0.2.5
     # via prompt-toolkit
@@ -686,7 +687,7 @@ webencodings==0.5.1
     #   tinycss2
 websocket-client==1.3.3
     # via jupyter-server
-werkzeug==2.1.2
+werkzeug==2.2.2
     # via
     #   flask
     #   tensorboard
@@ -694,7 +695,7 @@ wheel==0.37.1
     # via tensorboard
 xarray==2022.6.0
     # via datashader
-yarl==1.7.2
+yarl==1.8.1
     # via aiohttp
 zict==2.2.0
     # via distributed
