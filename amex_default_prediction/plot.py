@@ -63,7 +63,7 @@ def plot_transformer(model_path, train_data_preprocessed_path, train_transformer
 
     df = train_df.select(
         "customer_ID",
-        F.row_number().over(Window.orderBy("customer_ID")).alias("customer_index"),
+        F.hash("customer_ID").alias("customer_index"),
         "label",
     ).join(train_transformer_df, on="customer_index", how="inner")
 
