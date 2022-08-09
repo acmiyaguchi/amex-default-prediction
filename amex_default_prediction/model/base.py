@@ -169,12 +169,15 @@ class TransformerInferenceTransformer(
 
         # bc = spark_session().sparkContext.broadcast(net.state_dict())
 
+        checkpoint = self.getCheckpointPath()
+        num_features = self.getNumFeatures()
+
         @F.pandas_udf("float")
         def predict_batch_udf(
             it: Iterator[Tuple[pd.Series, pd.Series, pd.Series]]
         ) -> Iterator[pd.Series]:
             model = TransformerModel.load_from_checkpoint(
-                self.getCheckpointPath(), d_model=self.getNumFeatures()
+                checkpoint, d_model=num_features
             )
             for src, src_key_padding_mask, src_pos in it:
                 # model = TransformerModel.load_state_dict(bc.value).to(device)
@@ -200,8 +203,9 @@ class TransformerInferenceTransformer(
                 # res = pd.Series([x.tobytes() for x in z[0]])
                 # res = pd.Series([float(x[0]) for x in z[0]])
                 res = pd.Series([0.0 for _ in range(src.shape[0])])
-                print(res, flush=True)
+                # print(res, flush=True)
                 yield res
+            print("WHAT???")
 
         # @F.udf("array<float>")
         # def bytes_to_array(data: bytes):
@@ -455,10 +459,7 @@ def fit_simple_with_transformer(
             spark, train_data_preprocessed_path, train_ratio, *args, **kwargs
         )
         df = (
-            df.withColumn(
-                "customer_index",
-                F.row_number().over(Window.orderBy("customer_ID")),
-            )
+            df.withColumn("customer_index", F.hash("customer_ID"))
             .join(transformer_df, on="customer_index", how="inner")
             .withColumn("features", array_to_vector("prediction"))
             .repartition(spark.sparkContext.defaultParallelism * 2)

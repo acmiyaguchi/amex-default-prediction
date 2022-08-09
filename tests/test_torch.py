@@ -1,3 +1,4 @@
+from typing import Iterator
 from uuid import uuid4
 
 import numpy as np
@@ -219,7 +220,10 @@ def test_transformer_trainer_accepts_petastorm_transformer_data_module(
 
 
 def test_transformer_with_manual_tensor_creation(
-    spark, synthetic_transformer_train_df_path, synthetic_transformer_train_pdf
+    spark,
+    synthetic_transformer_train_df_path,
+    synthetic_transformer_train_pdf,
+    tmp_path,
 ):
     batch_size = 10
     subsequence_length = 4
@@ -239,6 +243,12 @@ def test_transformer_with_manual_tensor_creation(
     predictions = trainer.predict(model, datamodule=data_module)
     assert len(predictions) == 1
     assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])
+
+    model_checkpoint = tmp_path / "model.ckpt"
+    trainer.save_checkpoint(model_checkpoint.as_posix())
+    model = TransformerModel.load_from_checkpoint(
+        model_checkpoint.as_posix(), d_model=8
+    )
 
     df = (
         transform_into_transformer_predict_pairs(
@@ -285,6 +295,20 @@ def test_transformer_inference_transformer(
 
     model_checkpoint = tmp_path / "model.ckpt"
     trainer.save_checkpoint(model_checkpoint.as_posix())
+
+    # load model in a udf and ensure it doesn't break
+    @F.pandas_udf("float")
+    def test_udf(it: Iterator[pd.Series]) -> Iterator[pd.Series]:
+        model = TransformerModel.load_from_checkpoint(
+            model_checkpoint.as_posix(), d_model=8
+        )
+        for item in it:
+            print(item, flush=True)
+            yield item
+
+    spark.createDataFrame([{"feature": 1.0} for _ in range(10)]).select(
+        test_udf(F.col("feature"))
+    ).show()
 
     transformer_model = TransformerInferenceTransformer(
         inputCol="features",

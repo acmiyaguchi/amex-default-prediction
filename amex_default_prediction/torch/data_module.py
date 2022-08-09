@@ -152,9 +152,7 @@ class PetastormTransformerDataModule(PetastormDataModule):
                 "src",
                 "src_key_padding_mask",
                 "src_pos",
-                F.row_number()
-                .over(Window.orderBy("customer_ID"))
-                .alias("customer_index"),
+                F.hash("customer_ID").alias("customer_index"),
             )
             .repartition(self.num_partitions)
         )
