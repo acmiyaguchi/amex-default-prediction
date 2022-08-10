@@ -46,6 +46,16 @@ def main(model_name):
                     if "with-pca" in model_name
                     else []
                 ),
+                *(
+                    [
+                        (
+                            intermediate_root / "models/torch-transform-transformer/"
+                            "20220809074430-0.16.4-79896fa"
+                        ).as_posix()
+                    ]
+                    if "with-transformer" in model_name
+                    else []
+                ),
                 output.as_posix(),
             ]
         ),

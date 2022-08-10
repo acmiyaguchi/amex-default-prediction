@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import click
+import pandas as pd
 import pytorch_lightning as pl
+import tqdm
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -107,3 +109,60 @@ def fit_transformer(
         ],
     )
     trainer.fit(model, dm)
+
+
+@click.command()
+@click.argument("train_data_preprocessed_path", type=click.Path(exists=True))
+@click.argument("pca_model_path", type=click.Path(exists=True))
+@click.argument("checkpoint_path", type=click.Path(exists=True))
+@click.argument("output_path", type=click.Path())
+@click.option("--cache-dir", default="file:///tmp")
+@click.option("--batch-size", default=4000, type=int)
+def transform_transformer(
+    train_data_preprocessed_path,
+    pca_model_path,
+    checkpoint_path,
+    output_path,
+    cache_dir,
+    batch_size,
+):
+    spark = spark_session()
+    input_size = get_spark_feature_size(
+        spark, train_data_preprocessed_path, pca_model_path
+    )
+    model = TransformerModel.load_from_checkpoint(checkpoint_path, d_model=input_size)
+    print(model)
+
+    dm = PetastormTransformerDataModule(
+        spark,
+        cache_dir,
+        train_data_preprocessed_path,
+        pca_model_path=pca_model_path,
+        subsequence_length=8,
+        batch_size=batch_size,
+    )
+    dm.setup()
+
+    Path(output_path).mkdir(parents=True, exist_ok=True)
+
+    # NOTE: this loop is very slow, I have no idea how to make this faster at
+    # the moment...
+    acc = []
+    n_batches = 10
+    for batch_idx, batch in tqdm.tqdm(enumerate(dm.predict_dataloader())):
+        cidx = batch["customer_index"].cpu().detach().numpy()
+        z = model.predict_step(batch, batch_idx).transpose(0, 1).cpu().detach().numpy()
+        df = pd.DataFrame(
+            zip(cidx, z.reshape(z.shape[0], -1)),
+            columns=["customer_index", "prediction"],
+        )
+        acc.append(df)
+        if len(acc) > n_batches:
+            df = pd.concat(acc)
+            df.to_parquet(
+                Path(output_path) / f"part_{batch_idx:05}.parquet", index=False
+            )
+            acc = []
+    if acc:
+        df = pd.concat(acc)
+        df.to_parquet(Path(output_path) / f"part_{batch_idx:05}.parquet", index=False)

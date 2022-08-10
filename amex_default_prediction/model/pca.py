@@ -1,6 +1,6 @@
 import click
 from pyspark.ml import Pipeline
-from pyspark.ml.feature import PCA, Imputer, MinMaxScaler, RobustScaler, StandardScaler
+from pyspark.ml.feature import PCA, StandardScaler
 
 from amex_default_prediction.utils import spark_session
 

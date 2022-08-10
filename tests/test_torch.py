@@ -1,3 +1,4 @@
+from typing import Iterator
 from uuid import uuid4
 
 import numpy as np
@@ -8,14 +9,17 @@ import torch
 from pyspark.ml import functions as mlF
 from pyspark.sql import functions as F
 
+from amex_default_prediction.model.base import TransformerInferenceTransformer
 from amex_default_prediction.torch.data_module import (
     PetastormDataModule,
     PetastormTransformerDataModule,
-    create_transformer_pair,
     get_spark_feature_size,
-    transform_into_transformer_pairs,
 )
 from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
+from amex_default_prediction.torch.transform import (
+    transform_into_transformer_pairs,
+    transform_into_transformer_predict_pairs,
+)
 
 
 def test_get_parquet_feature_size(spark, synthetic_train_data_path):
@@ -87,22 +91,7 @@ def synthetic_transformer_train_df_path(
     yield output
 
 
-def test_test_create_transformer_pair(synthetic_transformer_train_pdf):
-    pdf = synthetic_transformer_train_pdf
-    for key in pdf.customer_ID.unique():
-        length = 4
-        res = create_transformer_pair(pdf[pdf.customer_ID == key], length)
-        assert res.shape[0] == 1
-        print(res)
-        row = res.iloc[0]
-        assert len(row.src) > 0
-        assert len(row.src[0]) == 8
-        assert len(row.tgt) > 0
-        assert len(row.src_key_padding_mask) == length
-        assert len(row.tgt_key_padding_mask) == length
-
-
-def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
+def test_transform_into_transformer_pairs(spark, synthetic_transformer_train_pdf):
     df = (
         transform_into_transformer_pairs(
             spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
@@ -135,6 +124,28 @@ def test_synthetic_transformer_train_df(spark, synthetic_transformer_train_pdf):
 
     assert (pdf.precondition != 8).sum() == 0
     df.unpersist()
+
+
+def test_transform_into_transformer_predict_pairs(
+    spark, synthetic_transformer_train_pdf
+):
+    df = (
+        transform_into_transformer_predict_pairs(
+            spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+                "features", mlF.array_to_vector("features")
+            ),
+            length=4,
+        ).repartition(1)
+    ).cache()
+    df.printSchema()
+
+    df.show(vertical=True, truncate=80)
+    assert df.count() == 40
+    assert df.columns == ["customer_ID", "src", "src_key_padding_mask", "src_pos"]
+
+    for k, v in [["src", 8 * 4], ["src_key_padding_mask", 4], ["src_pos", 4]]:
+        pdf = df.select((F.size(k)).alias("precondition")).toPandas()
+        assert (pdf.precondition != v).sum() == 0
 
 
 def test_petastorm_transformer_data_module_has_fields(
@@ -187,7 +198,134 @@ def test_transformer_trainer_accepts_petastorm_transformer_data_module(
         synthetic_transformer_train_df_path,
         batch_size=batch_size,
         subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
     )
     trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
     model = TransformerModel(d_model=8)
     trainer.fit(model, datamodule=data_module)
+
+    predictions = trainer.predict(model, datamodule=data_module)
+    assert len(predictions) == 1
+    assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])
+
+    for batch_idx, batch in enumerate(data_module.predict_dataloader()):
+        cidx = batch["customer_index"].cpu().detach().numpy()
+        z = model.predict_step(batch, batch_idx).cpu().detach().numpy()
+        df = pd.DataFrame(zip(cidx, z[0]), columns=["customer_index", "prediction"])
+        series = pd.Series(list(z[0]))
+        print(series)
+        assert df.shape == (batch_size, 2)
+        break
+
+
+def test_transformer_with_manual_tensor_creation(
+    spark,
+    synthetic_transformer_train_df_path,
+    synthetic_transformer_train_pdf,
+    tmp_path,
+):
+    batch_size = 10
+    subsequence_length = 4
+    data_module = PetastormTransformerDataModule(
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
+    )
+    trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
+    model = TransformerModel(d_model=8)
+    trainer.fit(model, datamodule=data_module)
+
+    predictions = trainer.predict(model, datamodule=data_module)
+    assert len(predictions) == 1
+    assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])
+
+    model_checkpoint = tmp_path / "model.ckpt"
+    trainer.save_checkpoint(model_checkpoint.as_posix())
+    model = TransformerModel.load_from_checkpoint(
+        model_checkpoint.as_posix(), d_model=8
+    )
+
+    df = (
+        transform_into_transformer_predict_pairs(
+            spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+                "features", mlF.array_to_vector("features")
+            ),
+            length=4,
+        )
+        .limit(10)
+        .toPandas()
+    )
+    batch = {
+        "src": torch.from_numpy(np.stack(df.src.values)).float(),
+        "src_key_padding_mask": torch.from_numpy(
+            np.stack(df.src_key_padding_mask.values)
+        ),
+        "src_pos": torch.from_numpy(np.stack(df.src_pos.values)),
+    }
+    z = model.predict_step(batch, 0).cpu().detach().numpy()
+    series = pd.Series([list(x) for x in z[0]])
+    print(series)
+
+
+def test_transformer_inference_transformer(
+    spark,
+    synthetic_transformer_train_df_path,
+    synthetic_transformer_train_pdf,
+    tmp_path,
+):
+    batch_size = 10
+    subsequence_length = 4
+    data_module = PetastormTransformerDataModule(
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
+    )
+    trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
+    model = TransformerModel(d_model=8)
+    trainer.fit(model, datamodule=data_module)
+
+    model_checkpoint = tmp_path / "model.ckpt"
+    trainer.save_checkpoint(model_checkpoint.as_posix())
+
+    # load model in a udf and ensure it doesn't break
+    @F.pandas_udf("float")
+    def test_udf(it: Iterator[pd.Series]) -> Iterator[pd.Series]:
+        # TODO: this breaks the UDF because the Spark worker dies (for some
+        # reason unknown to me)
+        model = TransformerModel.load_from_checkpoint(
+            model_checkpoint.as_posix(), d_model=8
+        )
+        for item in it:
+            print(item, flush=True)
+            yield item
+
+    spark.createDataFrame([{"feature": 1.0} for _ in range(10)]).select(
+        test_udf(F.col("feature"))
+    ).show()
+
+    transformer_model = TransformerInferenceTransformer(
+        inputCol="features",
+        checkpointPath=model_checkpoint.as_posix(),
+        sequenceLength=subsequence_length,
+        numFeatures=8,
+    )
+    print(transformer_model)
+
+    res = transformer_model.transform(
+        spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+            "features", mlF.array_to_vector("features")
+        )
+    )
+    res.printSchema()
+    assert "prediction" in res.columns
+    res.show(vertical=True, truncate=80, n=2)
+    assert res.count() > 40

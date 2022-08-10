@@ -1,11 +1,13 @@
 import click
 import torch
 import torch.nn as nn
-from sparktorch import SparkTorch, serialize_torch_obj
+from sparktorch import SparkTorch, create_spark_torch_model, serialize_torch_obj
 
 from amex_default_prediction.evaluation import AmexMetricEvaluator
 from amex_default_prediction.utils import spark_session
 
+from ..torch.data_module import get_spark_feature_size
+from ..torch.net import TransformerModel
 from .base import fit_generic, read_train_data
 
 
