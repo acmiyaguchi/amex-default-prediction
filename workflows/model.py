@@ -50,7 +50,7 @@ def main(model_name):
                     [
                         (
                             intermediate_root / "models/torch-transform-transformer/"
-                            "20220809071318-0.16.3-1d6e022"
+                            "20220809074430-0.16.4-79896fa"
                         ).as_posix()
                     ]
                     if "with-transformer" in model_name

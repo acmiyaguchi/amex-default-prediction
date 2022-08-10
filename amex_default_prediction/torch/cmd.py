@@ -148,11 +148,14 @@ def transform_transformer(
     # NOTE: this loop is very slow, I have no idea how to make this faster at
     # the moment...
     acc = []
-    n_batches = 100
+    n_batches = 10
     for batch_idx, batch in tqdm.tqdm(enumerate(dm.predict_dataloader())):
         cidx = batch["customer_index"].cpu().detach().numpy()
-        z = model.predict_step(batch, batch_idx).cpu().detach().numpy()
-        df = pd.DataFrame(zip(cidx, z[0]), columns=["customer_index", "prediction"])
+        z = model.predict_step(batch, batch_idx).transpose(0, 1).cpu().detach().numpy()
+        df = pd.DataFrame(
+            zip(cidx, z.reshape(z.shape[0], -1)),
+            columns=["customer_index", "prediction"],
+        )
         acc.append(df)
         if len(acc) > n_batches:
             df = pd.concat(acc)
