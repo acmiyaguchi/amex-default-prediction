@@ -299,6 +299,8 @@ def test_transformer_inference_transformer(
     # load model in a udf and ensure it doesn't break
     @F.pandas_udf("float")
     def test_udf(it: Iterator[pd.Series]) -> Iterator[pd.Series]:
+        # TODO: this breaks the UDF because the Spark worker dies (for some
+        # reason unknown to me)
         model = TransformerModel.load_from_checkpoint(
             model_checkpoint.as_posix(), d_model=8
         )

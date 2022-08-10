@@ -167,12 +167,10 @@ class TransformerInferenceTransformer(
     def _transform(self, dataset):
         """https://docs.databricks.com/_static/notebooks/deep-learning/pytorch-images.html"""
 
-        # bc = spark_session().sparkContext.broadcast(net.state_dict())
-
         checkpoint = self.getCheckpointPath()
         num_features = self.getNumFeatures()
 
-        @F.pandas_udf("float")
+        @F.pandas_udf("array<float>")
         def predict_batch_udf(
             it: Iterator[Tuple[pd.Series, pd.Series, pd.Series]]
         ) -> Iterator[pd.Series]:
@@ -180,36 +178,20 @@ class TransformerInferenceTransformer(
                 checkpoint, d_model=num_features
             )
             for src, src_key_padding_mask, src_pos in it:
-                # model = TransformerModel.load_state_dict(bc.value).to(device)
-                # print(src.shape)
-                # value = {
-                #     "src": torch.from_numpy(np.stack(src.values))
-                #     .float()
-                #     .to(device),
-                #     "src_key_padding_mask": (
-                #         torch.from_numpy(np.stack(src_key_padding_mask.values)).to(
-                #             device
-                #         )
-                #     ),
-                #     "src_pos": (
-                #         torch.from_numpy(np.stack(src_pos.values)).to(device)
-                #     ),
-                # }
-                # try:
-                #     z = model.predict_step(value, 0).cpu().detach().numpy()
-                # except Exception as e:
-                #     print(e, flush=True)
-                #     raise e
-                # res = pd.Series([x.tobytes() for x in z[0]])
-                # res = pd.Series([float(x[0]) for x in z[0]])
-                res = pd.Series([0.0 for _ in range(src.shape[0])])
-                # print(res, flush=True)
+                value = {
+                    "src": torch.from_numpy(np.stack(src.values)).float(),
+                    "src_key_padding_mask": (
+                        torch.from_numpy(np.stack(src_key_padding_mask.values))
+                    ),
+                    "src_pos": torch.from_numpy(np.stack(src_pos.values)),
+                }
+                try:
+                    z = model.predict_step(value, 0).cpu().detach().numpy()
+                except Exception as e:
+                    print(e, flush=True)
+                    raise e
+                res = pd.Series(list(z[0]))
                 yield res
-            print("WHAT???")
-
-        # @F.udf("array<float>")
-        # def bytes_to_array(data: bytes):
-        #     return np.frombuffer(data, dtype=np.float32)
 
         transformed = transform_into_transformer_predict_pairs(
             dataset.select("customer_ID", "age_days", "features"),
