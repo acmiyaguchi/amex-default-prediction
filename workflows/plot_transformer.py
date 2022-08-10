@@ -22,7 +22,7 @@ def main():
                 (intermediate_root / "train_data_preprocessed_v4").as_posix(),
                 (
                     intermediate_root
-                    / "models/torch-transform-transformer/20220809074430-0.16.4-79896fa"
+                    / "models/torch-transform-transformer/20220810174637-0.17.0-36d978d"
                 ).as_posix(),
             ]
         ),

@@ -65,6 +65,8 @@ def fit_strawman(
 @click.option("--train-ratio", default=0.8, type=float)
 @click.option("--cache-dir", default="file:///tmp")
 @click.option("--batch-size", default=4000, type=int)
+@click.option("--sequence-length", default=8, type=int)
+@click.option("--max-position", default=1024, type=int)
 def fit_transformer(
     test_data_preprocessed_path,
     pca_model_path,
@@ -72,20 +74,35 @@ def fit_transformer(
     train_ratio,
     cache_dir,
     batch_size,
+    sequence_length,
+    max_position,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
         spark, test_data_preprocessed_path, pca_model_path
     )
-    model = TransformerModel(d_model=input_size)
+    model = TransformerModel(d_model=input_size, max_len=max_position)
     print(model)
+
+    wandb_logger = WandbLogger(
+        project="amex-default-prediction",
+        name=Path(output_path).name,
+        save_dir=output_path,
+    )
+    wandb_logger.experiment.config.update(
+        {
+            "sequence_length": sequence_length,
+            "max_position": max_position,
+            "batch_size": batch_size,
+        }
+    )
 
     dm = PetastormTransformerDataModule(
         spark,
         cache_dir,
         test_data_preprocessed_path,
         pca_model_path=pca_model_path,
-        subsequence_length=8,
+        subsequence_length=sequence_length,
         train_ratio=train_ratio,
         batch_size=batch_size,
     )
@@ -96,11 +113,7 @@ def fit_transformer(
         detect_anomaly=True,
         logger=[
             TensorBoardLogger(output_path, log_graph=True),
-            WandbLogger(
-                project="amex-default-prediction",
-                name=Path(output_path).name,
-                save_dir=output_path,
-            ),
+            wandb_logger,
         ],
         reload_dataloaders_every_n_epochs=1,
         callbacks=[
@@ -109,6 +122,8 @@ def fit_transformer(
         ],
     )
     trainer.fit(model, dm)
+    trainer.save_checkpoint(f"{output_path}/model.ckpt")
+    print(f"wrote checkpoint {output_path}/model.ckpt")
 
 
 @click.command()
@@ -118,6 +133,8 @@ def fit_transformer(
 @click.argument("output_path", type=click.Path())
 @click.option("--cache-dir", default="file:///tmp")
 @click.option("--batch-size", default=4000, type=int)
+@click.option("--sequence-length", default=8, type=int)
+@click.option("--max-position", default=1024, type=int)
 def transform_transformer(
     train_data_preprocessed_path,
     pca_model_path,
@@ -125,12 +142,16 @@ def transform_transformer(
     output_path,
     cache_dir,
     batch_size,
+    sequence_length,
+    max_position,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
         spark, train_data_preprocessed_path, pca_model_path
     )
-    model = TransformerModel.load_from_checkpoint(checkpoint_path, d_model=input_size)
+    model = TransformerModel.load_from_checkpoint(
+        checkpoint_path, d_model=input_size, max_len=max_position
+    )
     print(model)
 
     dm = PetastormTransformerDataModule(
@@ -138,7 +159,7 @@ def transform_transformer(
         cache_dir,
         train_data_preprocessed_path,
         pca_model_path=pca_model_path,
-        subsequence_length=8,
+        subsequence_length=sequence_length,
         batch_size=batch_size,
     )
     dm.setup()
@@ -151,9 +172,12 @@ def transform_transformer(
     n_batches = 10
     for batch_idx, batch in tqdm.tqdm(enumerate(dm.predict_dataloader())):
         cidx = batch["customer_index"].cpu().detach().numpy()
-        z = model.predict_step(batch, batch_idx).transpose(0, 1).cpu().detach().numpy()
+        z = model.predict_step(batch, batch_idx).cpu().detach().numpy()
+        # NOTE: requires transposing data
+        # data = z.reshape(z.shape[0], -1)
+        data = z[0]
         df = pd.DataFrame(
-            zip(cidx, z.reshape(z.shape[0], -1)),
+            zip(cidx, data),
             columns=["customer_index", "prediction"],
         )
         acc.append(df)

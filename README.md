@@ -54,3 +54,59 @@ Batch size of 4000: 10.8GB/11GB (70% cuda, 40% copy)
 - https://github.com/uber/petastorm/issues/570
 - https://towardsdatascience.com/transformers-explained-visually-part-2-how-it-works-step-by-step-b49fa4a64f34
 - https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+
+### transformer
+
+The first iteration only takes into consideration a single window per customer.
+I chose a sequence length of 8 based on the histogram of statements per customer.
+
+```
++--------------+------+
+|customer_count| count|
++--------------+------+
+|             1|  5827|
+|             2|  8174|
+|             3|  7803|
+|             4|  8348|
+|             5|  8419|
+|             6|  8833|
+|             7|  9653|
+|             8|  9775|
+|             9| 10552|
+|            10|  9638|
+|            11|  9943|
+|            12| 16327|
+|            13|811329|
++--------------+------+
+```
+
+Here are the scores when using the the transformer model.
+
+```
++-------------------------+-----------------------------+---------------------+
+|model                    |version                      |bestScore            |
++-------------------------+-----------------------------+---------------------+
+|gbt-with-transformer     |20220810021709-0.16.4-378ecd8|0.6478601422210726   |
+|logistic-with-transformer|20220809080410-0.16.4-79896fa|0.6577801934802608   |
+|logistic-with-transformer|20220809073645-0.16.3-1d6e022|0.6254525936757505   |
+|gbt-with-transformer     |20220808094025-0.16.2-8a4b536|0.6338066825994494   |
++-------------------------+-----------------------------+---------------------+
+```
+
+The first two rows are from using all the features (128x8).
+The last two rows are from using only the first feature (128x1).
+
+Here are a few things that I want to try and see if there are improvements:
+
+- Increase the sequence length to 16.
+  This is easy and requires no code changes.
+- Use a smaller position encoder utilizing age in months instead of age in days.
+  This is a minor code change, and can be tested using multiple sequence lengths.
+- Use a larger dataset.
+  In addition to using the left-most shifted window, I'd like to also include a dataset that includes right shifted windows.
+  This is a complicated change, but could improve results further.
+
+#### models
+
+- models/torch-transformer/20220725054744-0.16.2-6d73fff/lightning_logs_amex-default-prediction/0_21aakrzj/checkpoints/epoch=8-step=1656.ckpt
+  - initial model with sequence length 8

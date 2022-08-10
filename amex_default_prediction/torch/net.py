@@ -94,6 +94,7 @@ class TransformerModel(pl.LightningModule):
 
     def __init__(self, d_model, max_len=1024, dropout=0.1, **kwargs):
         super(TransformerModel, self).__init__()
+        self.save_hyperparameters()
         self.d_model = d_model
         self.pos_encoder = PositionalEncoding(d_model, dropout=dropout, max_len=max_len)
         self.transformer = nn.Transformer(d_model, dropout=dropout, **kwargs)

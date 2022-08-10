@@ -31,7 +31,7 @@ def main(model_name):
                         (
                             intermediate_root
                             / "models/pca/20220723073653-0.15.2-c5aeb38"
-                        ).as_posix()
+                        ).as_posix(),
                     ]
                     if "transformer" in model_name
                     else []
@@ -42,9 +42,7 @@ def main(model_name):
                             intermediate_root
                             / (
                                 "models/torch-transformer/"
-                                "20220725054744-0.16.2-6d73fff/"
-                                "lightning_logs_amex-default-prediction/0_21aakrzj/"
-                                "checkpoints/epoch=8-step=1656.ckpt"
+                                "20220810060736-0.17.0-36d978d/model.ckpt"
                             )
                         ).as_posix()
                     ]
@@ -52,6 +50,12 @@ def main(model_name):
                     else []
                 ),
                 output.as_posix(),
+                "--sequence-length",
+                "16",
+                "--max-position",
+                "512",
+                "--batch-size",
+                "1750",
             ]
         ),
         spark_driver_memory=spark_driver_memory,
