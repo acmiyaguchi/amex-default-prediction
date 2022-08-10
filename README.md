@@ -100,6 +100,7 @@ Here are a few things that I want to try and see if there are improvements:
 
 - Increase the sequence length to 16.
   This is easy and requires no code changes.
+- Increase the number of encoder/decoder layers.
 - Use a smaller position encoder utilizing age in months instead of age in days.
   This is a minor code change, and can be tested using multiple sequence lengths.
 - Use a larger dataset.
@@ -110,3 +111,6 @@ Here are a few things that I want to try and see if there are improvements:
 
 - models/torch-transformer/20220725054744-0.16.2-6d73fff/lightning_logs_amex-default-prediction/0_21aakrzj/checkpoints/epoch=8-step=1656.ckpt
   - initial model with sequence length 8
+- models/torch-transformer/20220810060736-0.17.0-36d978d/model.ckpt
+  - sequence length 16
+- models/torch-transformer/20220810184502-0.17.1-53636bc/model.ckpt

@@ -67,6 +67,8 @@ def fit_strawman(
 @click.option("--batch-size", default=4000, type=int)
 @click.option("--sequence-length", default=8, type=int)
 @click.option("--max-position", default=1024, type=int)
+@click.option("--max-position", default=1024, type=int)
+@click.option("--layers", default=6, type=int)
 def fit_transformer(
     test_data_preprocessed_path,
     pca_model_path,
@@ -76,12 +78,18 @@ def fit_transformer(
     batch_size,
     sequence_length,
     max_position,
+    layers,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
         spark, test_data_preprocessed_path, pca_model_path
     )
-    model = TransformerModel(d_model=input_size, max_len=max_position)
+    model = TransformerModel(
+        d_model=input_size,
+        max_len=max_position,
+        num_encoder_layers=layers,
+        num_decoder_layers=layers,
+    )
     print(model)
 
     wandb_logger = WandbLogger(
@@ -92,7 +100,6 @@ def fit_transformer(
     wandb_logger.experiment.config.update(
         {
             "sequence_length": sequence_length,
-            "max_position": max_position,
             "batch_size": batch_size,
         }
     )

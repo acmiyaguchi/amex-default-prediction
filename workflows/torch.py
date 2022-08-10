@@ -42,7 +42,7 @@ def main(model_name):
                             intermediate_root
                             / (
                                 "models/torch-transformer/"
-                                "20220810060736-0.17.0-36d978d/model.ckpt"
+                                "20220810195955-0.17.1-53636bc/model.ckpt"
                             )
                         ).as_posix()
                     ]
@@ -51,11 +51,19 @@ def main(model_name):
                 ),
                 output.as_posix(),
                 "--sequence-length",
-                "16",
+                "8",
                 "--max-position",
                 "512",
                 "--batch-size",
                 "1750",
+                *(
+                    [
+                        "--layers",
+                        "8",
+                    ]
+                    if "torch-transformer" == model_name
+                    else []
+                ),
             ]
         ),
         spark_driver_memory=spark_driver_memory,
