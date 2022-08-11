@@ -13,6 +13,7 @@ from amex_default_prediction.model.base import read_train_data
 from .transform import (
     transform_into_transformer_pairs,
     transform_into_transformer_predict_pairs,
+    transform_into_transformer_reverse_pairs,
     transform_vector_to_array,
 )
 
@@ -103,12 +104,14 @@ class PetastormTransformerDataModule(PetastormDataModule):
         pca_model_path=None,
         subsequence_length=8,
         age_months=False,
+        predict_reverse=False,
         **kwargs
     ):
         super().__init__(spark, cache_dir, train_data_preprocessed_path, **kwargs)
         self.pca_model_path = pca_model_path
         self.subsequence_length = subsequence_length
         self.age_months = age_months
+        self.predict_reverse = predict_reverse
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
@@ -130,10 +133,13 @@ class PetastormTransformerDataModule(PetastormDataModule):
             ]
 
         def make_train_converter(df):
+            func = (
+                transform_into_transformer_reverse_pairs
+                if self.predict_reverse
+                else transform_into_transformer_pairs
+            )
             return make_spark_converter(
-                transform_into_transformer_pairs(
-                    df, self.subsequence_length, self.age_months
-                )
+                func(df, self.subsequence_length, self.age_months)
                 .select(
                     "src",
                     "tgt",

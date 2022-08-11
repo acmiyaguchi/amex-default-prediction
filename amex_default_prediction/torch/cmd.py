@@ -70,6 +70,7 @@ def fit_strawman(
 @click.option("--max-position", default=1024, type=int)
 @click.option("--layers", default=6, type=int)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
+@click.option("--predict-reverse/--no-predict-reverse", default=False, type=bool)
 def fit_transformer(
     test_data_preprocessed_path,
     pca_model_path,
@@ -81,6 +82,7 @@ def fit_transformer(
     max_position,
     layers,
     age_months,
+    predict_reverse,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
@@ -104,6 +106,7 @@ def fit_transformer(
             "sequence_length": sequence_length,
             "batch_size": batch_size,
             "age_months": age_months,
+            "predict_reverse": predict_reverse,
         }
     )
 
@@ -116,6 +119,7 @@ def fit_transformer(
         train_ratio=train_ratio,
         batch_size=batch_size,
         age_months=age_months,
+        predict_reverse=predict_reverse,
     )
 
     trainer = pl.Trainer(

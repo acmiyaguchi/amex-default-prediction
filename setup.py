@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="amex_default_prediction",
-    version="0.17.2",
+    version="0.17.3",
     description="Utilities for amex default prediction challenge",
     author="Anthony Miyaguchi",
     author_email="acmiyaguchi@gmail.com",

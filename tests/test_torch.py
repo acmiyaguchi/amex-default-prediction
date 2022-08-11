@@ -19,6 +19,7 @@ from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
 from amex_default_prediction.torch.transform import (
     transform_into_transformer_pairs,
     transform_into_transformer_predict_pairs,
+    transform_into_transformer_reverse_pairs,
 )
 
 
@@ -94,6 +95,43 @@ def synthetic_transformer_train_df_path(
 def test_transform_into_transformer_pairs(spark, synthetic_transformer_train_pdf):
     df = (
         transform_into_transformer_pairs(
+            spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
+                "features", mlF.array_to_vector("features")
+            ),
+            length=4,
+        ).repartition(1)
+    ).cache()
+    df.printSchema()
+
+    df.show(vertical=True, truncate=80)
+    assert df.count() == 40
+
+    pdf = df.select((F.size("src") / F.lit(8)).alias("precondition")).toPandas()
+    assert (pdf.precondition != 4).sum() == 0
+
+    pdf = df.select((F.size("tgt") / F.lit(8)).alias("precondition")).toPandas()
+    assert (pdf.precondition != 4).sum() == 0
+
+    pdf = df.select(
+        (F.size("src_key_padding_mask") + F.size("tgt_key_padding_mask")).alias(
+            "precondition"
+        )
+    ).toPandas()
+    assert (pdf.precondition != 8).sum() == 0
+
+    pdf = df.select(
+        (F.size("src_pos") + F.size("tgt_pos")).alias("precondition")
+    ).toPandas()
+
+    assert (pdf.precondition != 8).sum() == 0
+    df.unpersist()
+
+
+def test_transform_into_transformer_reverse_pairs(
+    spark, synthetic_transformer_train_pdf
+):
+    df = (
+        transform_into_transformer_reverse_pairs(
             spark.createDataFrame(synthetic_transformer_train_pdf).withColumn(
                 "features", mlF.array_to_vector("features")
             ),

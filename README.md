@@ -117,3 +117,7 @@ Here are a few things that I want to try and see if there are improvements:
   - set layers to 8 (sequence 8) 0.63
 - 20220810235446-0.17.2-3690d12
   - set layers to 3 (sequence 8) 0.65
+- 20220811010740-0.17.2-4ca01fa
+  - set layers to 3 but used age in months
+- 20220811061857-0.17.3-dfa0520
+  - use new data loading with reversed sequence (16). 0.625

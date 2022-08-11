@@ -11,11 +11,12 @@ def main():
     intermediate_root = data_root / "intermediate"
     build_wheel()
 
-    sequence_length = 8
+    sequence_length = 16
     max_position = 24
     batch_size = 1750
     layers = 3
     age_months = True
+    predict_reverse = True
 
     model_name = "torch-transformer"
     torch_transformer_output = intermediate_root / "models" / model_name / unique_name()
@@ -38,6 +39,7 @@ def main():
                 "--layers",
                 str(layers),
                 "--age-months" if age_months else "",
+                "--predict-reverse" if predict_reverse else "",
             ]
         ),
         spark_driver_memory="20g",

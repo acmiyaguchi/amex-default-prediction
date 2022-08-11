@@ -155,3 +155,29 @@ def transform_into_transformer_predict_pairs(df, length=4, age_months=False):
             "src_pos",
         )
     )
+
+
+def transform_into_transformer_reverse_pairs(df, length=4, age_months=False):
+    # drop the last item of the src column, and make the tgt the reverse of the src
+    def drop_last(field, pad, length):
+        return F.concat(
+            pad, F.slice(F.col(field), length + 1, F.size(F.col(field)) - length)
+        )
+
+    return (
+        transform_into_transformer_predict_pairs(df, length, age_months)
+        .withColumn("dim", (F.size(F.col("src")) / length).cast("int"))
+        .select(
+            "customer_ID",
+            drop_last(
+                "src", F.array_repeat(F.lit(0.0), F.col("dim")), F.col("dim")
+            ).alias("src"),
+            drop_last("src_key_padding_mask", F.array(F.lit(1)), 1).alias(
+                "src_key_padding_mask"
+            ),
+            drop_last("src_pos", F.array(F.lit(0)), 1).alias("src_pos"),
+            F.reverse(F.col("src")).alias("tgt"),
+            F.reverse(F.col("src_key_padding_mask")).alias("tgt_key_padding_mask"),
+            F.reverse(F.col("src_pos")).alias("tgt_pos"),
+        )
+    )
