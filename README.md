@@ -114,3 +114,6 @@ Here are a few things that I want to try and see if there are improvements:
 - models/torch-transformer/20220810060736-0.17.0-36d978d/model.ckpt
   - sequence length 16
 - models/torch-transformer/20220810184502-0.17.1-53636bc/model.ckpt
+  - set layers to 8 (sequence 8) 0.63
+- 20220810235446-0.17.2-3690d12
+  - set layers to 3 (sequence 8) 0.65
