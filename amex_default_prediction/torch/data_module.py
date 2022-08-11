@@ -102,11 +102,13 @@ class PetastormTransformerDataModule(PetastormDataModule):
         train_data_preprocessed_path,
         pca_model_path=None,
         subsequence_length=8,
+        age_months=False,
         **kwargs
     ):
         super().__init__(spark, cache_dir, train_data_preprocessed_path, **kwargs)
         self.pca_model_path = pca_model_path
         self.subsequence_length = subsequence_length
+        self.age_months = age_months
 
     def setup(self, stage=None):
         # read the data so we can do stuff with it
@@ -130,8 +132,7 @@ class PetastormTransformerDataModule(PetastormDataModule):
         def make_train_converter(df):
             return make_spark_converter(
                 transform_into_transformer_pairs(
-                    df,
-                    self.subsequence_length,
+                    df, self.subsequence_length, self.age_months
                 )
                 .select(
                     "src",
@@ -147,7 +148,9 @@ class PetastormTransformerDataModule(PetastormDataModule):
         self.converter_train = make_train_converter(train_df)
         self.converter_val = make_train_converter(val_df)
         self.converter_predict = make_spark_converter(
-            transform_into_transformer_predict_pairs(full_df, self.subsequence_length)
+            transform_into_transformer_predict_pairs(
+                full_df, self.subsequence_length, self.age_months
+            )
             .select(
                 "src",
                 "src_key_padding_mask",

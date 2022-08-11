@@ -69,6 +69,7 @@ def fit_strawman(
 @click.option("--max-position", default=1024, type=int)
 @click.option("--max-position", default=1024, type=int)
 @click.option("--layers", default=6, type=int)
+@click.option("--age-months/--no-age-months", default=False, type=bool)
 def fit_transformer(
     test_data_preprocessed_path,
     pca_model_path,
@@ -79,6 +80,7 @@ def fit_transformer(
     sequence_length,
     max_position,
     layers,
+    age_months,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
@@ -101,6 +103,7 @@ def fit_transformer(
         {
             "sequence_length": sequence_length,
             "batch_size": batch_size,
+            "age_months": age_months,
         }
     )
 
@@ -112,6 +115,7 @@ def fit_transformer(
         subsequence_length=sequence_length,
         train_ratio=train_ratio,
         batch_size=batch_size,
+        age_months=age_months,
     )
 
     trainer = pl.Trainer(
@@ -142,6 +146,7 @@ def fit_transformer(
 @click.option("--batch-size", default=4000, type=int)
 @click.option("--sequence-length", default=8, type=int)
 @click.option("--max-position", default=1024, type=int)
+@click.option("--age-months/--no-age-months", default=False, type=bool)
 def transform_transformer(
     train_data_preprocessed_path,
     pca_model_path,
@@ -151,6 +156,7 @@ def transform_transformer(
     batch_size,
     sequence_length,
     max_position,
+    age_months,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
@@ -168,6 +174,7 @@ def transform_transformer(
         pca_model_path=pca_model_path,
         subsequence_length=sequence_length,
         batch_size=batch_size,
+        age_months=age_months,
     )
     dm.setup()
 

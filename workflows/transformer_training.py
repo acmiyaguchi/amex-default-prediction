@@ -12,9 +12,10 @@ def main():
     build_wheel()
 
     sequence_length = 8
-    max_position = 512
+    max_position = 24
     batch_size = 1750
     layers = 3
+    age_months = True
 
     model_name = "torch-transformer"
     torch_transformer_output = intermediate_root / "models" / model_name / unique_name()
@@ -36,6 +37,7 @@ def main():
                 str(batch_size),
                 "--layers",
                 str(layers),
+                "--age-months" if age_months else "",
             ]
         ),
         spark_driver_memory="20g",
@@ -62,6 +64,7 @@ def main():
                 str(max_position),
                 "--batch-size",
                 str(batch_size),
+                "--age-months" if age_months else "",
             ]
         ),
         spark_driver_memory="20g",
