@@ -1,9 +1,11 @@
 import math
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
 
 class StrawmanNet(pl.LightningModule):
@@ -41,6 +43,23 @@ class StrawmanNet(pl.LightningModule):
         loss = self._step(val_batch)
         self.log("val_loss", loss)
         return loss
+
+
+class CosineWarmupScheduler(optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer, warmup, max_iters):
+        self.warmup = warmup
+        self.max_num_iters = max_iters
+        super().__init__(optimizer)
+
+    def get_lr(self):
+        lr_factor = self.get_lr_factor(epoch=self.last_epoch)
+        return [base_lr * lr_factor for base_lr in self.base_lrs]
+
+    def get_lr_factor(self, epoch):
+        lr_factor = 0.5 * (1 + np.cos(np.pi * epoch / self.max_num_iters))
+        if epoch <= self.warmup:
+            lr_factor *= epoch * 1.0 / self.warmup
+        return lr_factor
 
 
 # https://github.com/pytorch/examples/blob/main/word_language_model/model.py
@@ -140,7 +159,9 @@ class TransformerModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+        lr_scheduler = CosineWarmupScheduler(
+            optimizer=optimizer, warmup=100, max_iters=2000
+        )
         return [optimizer], [lr_scheduler]
 
     def _step(self, batch, *args, **kwargs):
