@@ -71,6 +71,7 @@ def fit_strawman(
 @click.option("--layers", default=6, type=int)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
 @click.option("--predict-reverse/--no-predict-reverse", default=False, type=bool)
+@click.option("--tune", default=False, type=bool)
 def fit_transformer(
     test_data_preprocessed_path,
     pca_model_path,
@@ -83,6 +84,7 @@ def fit_transformer(
     layers,
     age_months,
     predict_reverse,
+    tune,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
@@ -93,6 +95,9 @@ def fit_transformer(
         max_len=max_position,
         num_encoder_layers=layers,
         num_decoder_layers=layers,
+        lr=1e-3,
+        warmup=500,
+        max_iters=10000,
     )
     print(model)
 
@@ -107,6 +112,7 @@ def fit_transformer(
             "batch_size": batch_size,
             "age_months": age_months,
             "predict_reverse": predict_reverse,
+            "tune": tune,
         }
     )
 
@@ -124,6 +130,14 @@ def fit_transformer(
 
     trainer = pl.Trainer(
         gpus=-1,
+        **(
+            dict(
+                auto_lr_find=True,
+                auto_scale_batch_size="binsearch",
+            )
+            if tune
+            else {}
+        ),
         default_root_dir=output_path,
         detect_anomaly=True,
         logger=[
@@ -136,7 +150,11 @@ def fit_transformer(
             ModelCheckpoint(monitor="val_loss", auto_insert_metric_name=True),
         ],
     )
-    trainer.fit(model, dm)
+    if tune:
+        # optimize lr and batch size
+        trainer.tune(model, datamodule=dm)
+
+    trainer.fit(model, datamodule=dm)
     trainer.save_checkpoint(f"{output_path}/model.ckpt")
     print(f"wrote checkpoint {output_path}/model.ckpt")
 

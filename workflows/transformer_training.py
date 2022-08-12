@@ -13,8 +13,8 @@ def main():
 
     sequence_length = 16
     max_position = 24
-    batch_size = 1750
-    layers = 3
+    batch_size = 2000
+    layers = 6
     age_months = True
     predict_reverse = True
 

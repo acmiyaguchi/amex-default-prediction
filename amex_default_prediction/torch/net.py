@@ -111,10 +111,18 @@ class PositionalEncoding(pl.LightningModule):
 class TransformerModel(pl.LightningModule):
     """Container module with a positional encoder."""
 
-    def __init__(self, d_model, max_len=1024, dropout=0.1, **kwargs):
+    def __init__(
+        self,
+        d_model,
+        max_len=1024,
+        dropout=0.1,
+        lr=1e-3,
+        warmup=500,
+        max_iters=20000,
+        **kwargs
+    ):
         super(TransformerModel, self).__init__()
         self.save_hyperparameters()
-        self.d_model = d_model
         self.pos_encoder = PositionalEncoding(d_model, dropout=dropout, max_len=max_len)
         self.transformer = nn.Transformer(d_model, dropout=dropout, **kwargs)
 
@@ -158,9 +166,11 @@ class TransformerModel(pl.LightningModule):
         return z
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
         lr_scheduler = CosineWarmupScheduler(
-            optimizer=optimizer, warmup=100, max_iters=2000
+            optimizer=optimizer,
+            warmup=self.hparams.warmup,
+            max_iters=self.hparams.max_iters,
         )
         return [optimizer], [lr_scheduler]
 
@@ -175,8 +185,8 @@ class TransformerModel(pl.LightningModule):
         )
         # reshape x and y to be [batch_size, seq_len, embed_dim] and reorder
         # dimensions to be [seq_len, batch_size, embed_dim]
-        x = x.view(x.shape[0], -1, self.d_model).transpose(0, 1)
-        y = y.view(y.shape[0], -1, self.d_model).transpose(0, 1)
+        x = x.view(x.shape[0], -1, self.hparams.d_model).transpose(0, 1)
+        y = y.view(y.shape[0], -1, self.hparams.d_model).transpose(0, 1)
 
         z = self(
             x,
@@ -207,7 +217,7 @@ class TransformerModel(pl.LightningModule):
             batch["src_key_padding_mask"],
             batch["src_pos"],
         )
-        x = x.view(x.shape[0], -1, self.d_model).transpose(0, 1)
+        x = x.view(x.shape[0], -1, self.hparams.d_model).transpose(0, 1)
         # this is a bit ugly, could be cleaned up a bit to match the _step function
         z = self.transformer.encoder(
             self.pos_encoder(x, src_pos.transpose(0, 1)),
