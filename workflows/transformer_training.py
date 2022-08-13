@@ -11,9 +11,10 @@ def main():
     intermediate_root = data_root / "intermediate"
     build_wheel()
 
+    d_model = 64
     sequence_length = 16
     max_position = 24
-    batch_size = 2000
+    batch_size = 1750
     layers = 6
     age_months = True
     predict_reverse = True
@@ -30,6 +31,8 @@ def main():
                     intermediate_root / "models/pca/20220723073653-0.15.2-c5aeb38"
                 ).as_posix(),
                 torch_transformer_output.as_posix(),
+                "--d-model",
+                str(d_model),
                 "--sequence-length",
                 str(sequence_length),
                 "--max-position",
@@ -62,8 +65,6 @@ def main():
                 torch_transform_transformer_output.as_posix(),
                 "--sequence-length",
                 str(sequence_length),
-                "--max-position",
-                str(max_position),
                 "--batch-size",
                 str(batch_size),
                 "--age-months" if age_months else "",

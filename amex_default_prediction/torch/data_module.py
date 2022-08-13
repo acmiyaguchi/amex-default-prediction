@@ -1,8 +1,13 @@
+import warnings
 from pathlib import Path
 
 import pyarrow  # noqa: F401 pylint: disable=W0611
 import pytorch_lightning as pl
-from petastorm.spark import SparkDatasetConverter, make_spark_converter
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from petastorm.spark import SparkDatasetConverter, make_spark_converter
+
 from pyspark.ml.functions import vector_to_array
 from pyspark.ml.pipeline import PipelineModel
 from pyspark.sql import Window

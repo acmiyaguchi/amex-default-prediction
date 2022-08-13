@@ -65,6 +65,7 @@ def fit_strawman(
 @click.option("--train-ratio", default=0.8, type=float)
 @click.option("--cache-dir", default="file:///tmp")
 @click.option("--batch-size", default=4000, type=int)
+@click.option("--d-model", default=64, type=int)
 @click.option("--sequence-length", default=8, type=int)
 @click.option("--max-position", default=1024, type=int)
 @click.option("--max-position", default=1024, type=int)
@@ -79,6 +80,7 @@ def fit_transformer(
     train_ratio,
     cache_dir,
     batch_size,
+    d_model,
     sequence_length,
     max_position,
     layers,
@@ -91,13 +93,14 @@ def fit_transformer(
         spark, test_data_preprocessed_path, pca_model_path
     )
     model = TransformerModel(
-        d_model=input_size,
+        d_input=input_size,
+        d_model=d_model,
         max_len=max_position,
         num_encoder_layers=layers,
         num_decoder_layers=layers,
         lr=1e-3,
-        warmup=500,
-        max_iters=10000,
+        warmup=100,
+        max_iters=10_000,
     )
     print(model)
 
@@ -129,7 +132,8 @@ def fit_transformer(
     )
 
     trainer = pl.Trainer(
-        gpus=-1,
+        accelerator="gpu",
+        devices=-1,
         **(
             dict(
                 auto_lr_find=True,
@@ -147,7 +151,12 @@ def fit_transformer(
         reload_dataloaders_every_n_epochs=1,
         callbacks=[
             EarlyStopping(monitor="val_loss", mode="min"),
-            ModelCheckpoint(monitor="val_loss", auto_insert_metric_name=True),
+            ModelCheckpoint(
+                monitor="val_loss",
+                auto_insert_metric_name=True,
+                save_top_k=5,
+            ),
+            ModelCheckpoint(dirpath=output_path, filename="model", monitor="val_loss"),
         ],
     )
     if tune:
@@ -155,8 +164,6 @@ def fit_transformer(
         trainer.tune(model, datamodule=dm)
 
     trainer.fit(model, datamodule=dm)
-    trainer.save_checkpoint(f"{output_path}/model.ckpt")
-    print(f"wrote checkpoint {output_path}/model.ckpt")
 
 
 @click.command()
@@ -167,7 +174,6 @@ def fit_transformer(
 @click.option("--cache-dir", default="file:///tmp")
 @click.option("--batch-size", default=4000, type=int)
 @click.option("--sequence-length", default=8, type=int)
-@click.option("--max-position", default=1024, type=int)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
 def transform_transformer(
     train_data_preprocessed_path,
@@ -177,16 +183,11 @@ def transform_transformer(
     cache_dir,
     batch_size,
     sequence_length,
-    max_position,
     age_months,
+    **kwargs,
 ):
     spark = spark_session()
-    input_size = get_spark_feature_size(
-        spark, train_data_preprocessed_path, pca_model_path
-    )
-    model = TransformerModel.load_from_checkpoint(
-        checkpoint_path, d_model=input_size, max_len=max_position
-    )
+    model = TransformerModel.load_from_checkpoint(checkpoint_path)
     print(model)
 
     dm = PetastormTransformerDataModule(
@@ -208,10 +209,11 @@ def transform_transformer(
     n_batches = 10
     for batch_idx, batch in tqdm.tqdm(enumerate(dm.predict_dataloader())):
         cidx = batch["customer_index"].cpu().detach().numpy()
-        z = model.predict_step(batch, batch_idx).cpu().detach().numpy()
+        z = model.predict_step(batch, batch_idx).transpose(0, 1)
+        z = z.cpu().detach().numpy()
         # NOTE: requires transposing data
-        # data = z.reshape(z.shape[0], -1)
-        data = z[0]
+        data = z.reshape(z.shape[0], -1)
+        # data = z[0]
         df = pd.DataFrame(
             zip(cidx, data),
             columns=["customer_index", "prediction"],

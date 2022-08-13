@@ -113,6 +113,7 @@ class TransformerModel(pl.LightningModule):
 
     def __init__(
         self,
+        d_input,
         d_model,
         max_len=1024,
         dropout=0.1,
@@ -124,8 +125,32 @@ class TransformerModel(pl.LightningModule):
     ):
         super(TransformerModel, self).__init__()
         self.save_hyperparameters()
-        self.pos_encoder = PositionalEncoding(d_model, dropout=dropout, max_len=max_len)
-        self.transformer = nn.Transformer(d_model, dropout=dropout, **kwargs)
+
+        # add some extra-nonlinearity for embedding the input data
+
+        def init_weights(m):
+            if isinstance(m, nn.Linear):
+                torch.nn.init.xavier_uniform_(m.weight)
+                m.bias.data.fill_(0.01)
+
+        self.input_net = nn.Sequential(
+            nn.Dropout(self.hparams.dropout),
+            nn.Linear(self.hparams.d_input, 2048),
+            nn.ReLU(),
+            nn.Dropout(self.hparams.dropout),
+            nn.Linear(2048, self.hparams.d_model),
+            nn.ReLU(),
+        )
+        self.input_net.apply(init_weights)
+
+        self.pos_encoder = PositionalEncoding(
+            self.hparams.d_model,
+            dropout=self.hparams.dropout,
+            max_len=self.hparams.max_len,
+        )
+        self.transformer = nn.Transformer(
+            self.hparams.d_model, dropout=self.hparams.dropout, **kwargs
+        )
 
     def _generate_square_subsequent_mask(self, sz):
         """Create a mask that masks starting from the right/
@@ -196,8 +221,11 @@ class TransformerModel(pl.LightningModule):
         )
         # reshape x and y to be [batch_size, seq_len, embed_dim] and reorder
         # dimensions to be [seq_len, batch_size, embed_dim]
-        x = x.view(x.shape[0], -1, self.hparams.d_model).transpose(0, 1)
-        y = y.view(y.shape[0], -1, self.hparams.d_model).transpose(0, 1)
+        x = self.input_net(x.view(x.shape[0], -1, self.hparams.d_input))
+        y = self.input_net(y.view(y.shape[0], -1, self.hparams.d_input))
+
+        x = x.transpose(0, 1)
+        y = y.transpose(0, 1)
 
         z = self(
             x,
@@ -210,7 +238,7 @@ class TransformerModel(pl.LightningModule):
         mask = (tgt_key_padding_mask == 0).transpose(0, 1)
         # NOTE: what is the best loss to use here? Does it even make sense to
         # use the cross entropy loss?
-        return F.mse_loss(z[mask], y[mask])
+        return F.cross_entropy(z[mask], y[mask])
 
     def training_step(self, train_batch, batch_idx):
         loss = self._step(train_batch)
@@ -228,7 +256,8 @@ class TransformerModel(pl.LightningModule):
             batch["src_key_padding_mask"],
             batch["src_pos"],
         )
-        x = x.view(x.shape[0], -1, self.hparams.d_model).transpose(0, 1)
+        x = self.input_net(x.view(x.shape[0], -1, self.hparams.d_input))
+        x = x.transpose(0, 1)
         # this is a bit ugly, could be cleaned up a bit to match the _step function
         z = self.transformer.encoder(
             self.pos_encoder(x, src_pos.transpose(0, 1)),
