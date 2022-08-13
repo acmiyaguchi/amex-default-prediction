@@ -119,6 +119,7 @@ class TransformerModel(pl.LightningModule):
         lr=1e-3,
         warmup=500,
         max_iters=20000,
+        predict_reverse=False,
         **kwargs
     ):
         super(TransformerModel, self).__init__()
@@ -147,7 +148,17 @@ class TransformerModel(pl.LightningModule):
         src_seq_len = src.shape[0]
         tgt_seq_len = tgt.shape[0]
 
-        tgt_mask = self._generate_square_subsequent_mask(tgt_seq_len).to(self.device)
+        # if we're predicting the reverse sequence, then we don't need any sort
+        # of masking aside from the ones that we get. If anything, having a mask
+        # in the wrong direction may cause issues.
+        if self.hparams.predict_reverse:
+            tgt_mask = (
+                torch.zeros((tgt_seq_len, tgt_seq_len)).type(torch.bool).to(self.device)
+            )
+        else:
+            tgt_mask = self._generate_square_subsequent_mask(tgt_seq_len).to(
+                self.device
+            )
         src_mask = (
             torch.zeros((src_seq_len, src_seq_len)).type(torch.bool).to(self.device)
         )

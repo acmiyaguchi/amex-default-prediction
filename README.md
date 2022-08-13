@@ -121,3 +121,7 @@ Here are a few things that I want to try and see if there are improvements:
   - set layers to 3 but used age in months
 - 20220811061857-0.17.3-dfa0520
   - use new data loading with reversed sequence (16). 0.625
+- 20220811133617-0.17.4-4439338
+  - reversed with cosine warmup scheduling
+- 20220812021606-0.17.5-2df8fd5
+  - reversed with cosine warmup scheduling and increased layers
