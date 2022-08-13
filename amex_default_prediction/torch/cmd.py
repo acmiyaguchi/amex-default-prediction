@@ -100,9 +100,9 @@ def fit_transformer(
         num_decoder_layers=layers,
         lr=1e-3,
         warmup=100,
-        max_iters=10_000,
+        max_iters=2_000,
     )
-    print(model)
+    # print(model)
 
     wandb_logger = WandbLogger(
         project="amex-default-prediction",

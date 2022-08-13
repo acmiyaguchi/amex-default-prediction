@@ -238,7 +238,10 @@ class TransformerModel(pl.LightningModule):
         mask = (tgt_key_padding_mask == 0).transpose(0, 1)
         # NOTE: what is the best loss to use here? Does it even make sense to
         # use the cross entropy loss?
-        return F.cross_entropy(z[mask], y[mask])
+        # return F.cosine_embedding_loss(
+        #     z[mask], y[mask], torch.ones(z.shape[0] * z.shape[1]).to(self.device)
+        # )
+        return F.mse_loss(z[mask], y[mask])
 
     def training_step(self, train_batch, batch_idx):
         loss = self._step(train_batch)
