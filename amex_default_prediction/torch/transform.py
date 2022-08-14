@@ -166,6 +166,7 @@ def transform_into_transformer_reverse_pairs(df, length=4, age_months=False):
 
     return (
         transform_into_transformer_predict_pairs(df, length, age_months)
+        .where("n > 1")
         .withColumn("dim", (F.size(F.col("src")) / length).cast("int"))
         .select(
             "customer_ID",

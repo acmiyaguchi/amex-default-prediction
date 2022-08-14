@@ -135,10 +135,10 @@ class TransformerModel(pl.LightningModule):
 
         self.input_net = nn.Sequential(
             nn.Dropout(self.hparams.dropout),
-            nn.Linear(self.hparams.d_input, 2048),
+            nn.Linear(self.hparams.d_input, 1024),
             nn.ReLU(),
             nn.Dropout(self.hparams.dropout),
-            nn.Linear(2048, self.hparams.d_model),
+            nn.Linear(1024, self.hparams.d_model),
             nn.ReLU(),
         )
         self.input_net.apply(init_weights)
@@ -176,7 +176,8 @@ class TransformerModel(pl.LightningModule):
         # if we're predicting the reverse sequence, then we don't need any sort
         # of masking aside from the ones that we get. If anything, having a mask
         # in the wrong direction may cause issues.
-        if self.hparams.predict_reverse:
+        # if self.hparams.predict_reverse:
+        if False:
             tgt_mask = (
                 torch.zeros((tgt_seq_len, tgt_seq_len)).type(torch.bool).to(self.device)
             )
@@ -266,4 +267,7 @@ class TransformerModel(pl.LightningModule):
             self.pos_encoder(x, src_pos.transpose(0, 1)),
             src_key_padding_mask=src_key_padding_mask.type(torch.bool),
         )
-        return z
+        return {
+            "customer_index": batch["customer_index"],
+            "prediction": z.transpose(0, 1).reshape(z.shape[1], -1),
+        }

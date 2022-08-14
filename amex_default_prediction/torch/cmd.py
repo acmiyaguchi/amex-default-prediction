@@ -1,3 +1,4 @@
+from multiprocessing import Pool
 from pathlib import Path
 
 import click
@@ -45,7 +46,8 @@ def fit_strawman(
     )
 
     trainer = pl.Trainer(
-        gpus=-1,
+        accelerator="gpu",
+        devices=-1,
         default_root_dir=output_path,
         detect_anomaly=True,
         logger=TensorBoardLogger(output_path, log_graph=True),
@@ -158,6 +160,7 @@ def fit_transformer(
             ),
             ModelCheckpoint(dirpath=output_path, filename="model", monitor="val_loss"),
         ],
+        max_epochs=30,
     )
     if tune:
         # optimize lr and batch size
@@ -175,6 +178,7 @@ def fit_transformer(
 @click.option("--batch-size", default=4000, type=int)
 @click.option("--sequence-length", default=8, type=int)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
+@click.option("--parallelism", default=8, type=int)
 def transform_transformer(
     train_data_preprocessed_path,
     pca_model_path,
@@ -184,11 +188,12 @@ def transform_transformer(
     batch_size,
     sequence_length,
     age_months,
+    parallelism,
     **kwargs,
 ):
     spark = spark_session()
     model = TransformerModel.load_from_checkpoint(checkpoint_path)
-    print(model)
+    model.freeze()
 
     dm = PetastormTransformerDataModule(
         spark,
@@ -205,26 +210,10 @@ def transform_transformer(
 
     # NOTE: this loop is very slow, I have no idea how to make this faster at
     # the moment...
-    acc = []
-    n_batches = 10
-    for batch_idx, batch in tqdm.tqdm(enumerate(dm.predict_dataloader())):
-        cidx = batch["customer_index"].cpu().detach().numpy()
-        z = model.predict_step(batch, batch_idx).transpose(0, 1)
-        z = z.cpu().detach().numpy()
-        # NOTE: requires transposing data
-        data = z.reshape(z.shape[0], -1)
-        # data = z[0]
+    trainer = pl.Trainer(accelerator="gpu", devices=-1)
+
+    for batch_idx, prediction in enumerate(trainer.predict(model, datamodule=dm)):
         df = pd.DataFrame(
-            zip(cidx, data),
-            columns=["customer_index", "prediction"],
+            {k: v.cpu().detach().numpy().tolist() for k, v in prediction.items()}
         )
-        acc.append(df)
-        if len(acc) > n_batches:
-            df = pd.concat(acc)
-            df.to_parquet(
-                Path(output_path) / f"part_{batch_idx:05}.parquet", index=False
-            )
-            acc = []
-    if acc:
-        df = pd.concat(acc)
         df.to_parquet(Path(output_path) / f"part_{batch_idx:05}.parquet", index=False)

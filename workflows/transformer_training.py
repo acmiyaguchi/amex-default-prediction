@@ -6,12 +6,13 @@ from .utils import build_wheel, run_spark, unique_name
 
 
 @click.command()
-def main():
+@click.option("--print-only/--no-print-only", default=False)
+def main(print_only):
     data_root = Path("data")
     intermediate_root = data_root / "intermediate"
     build_wheel()
 
-    d_model = 64
+    d_model = 32
     sequence_length = 16
     max_position = 24
     batch_size = 1750
@@ -46,6 +47,7 @@ def main():
             ]
         ),
         spark_driver_memory="20g",
+        print_only=print_only,
     )
 
     model_name = "torch-transform-transformer"
@@ -66,11 +68,12 @@ def main():
                 "--sequence-length",
                 str(sequence_length),
                 "--batch-size",
-                str(batch_size),
+                str(25000),
                 "--age-months" if age_months else "",
             ]
         ),
         spark_driver_memory="20g",
+        print_only=print_only,
     )
 
     run_spark(
@@ -88,6 +91,7 @@ def main():
             ]
         ),
         spark_driver_memory="10g",
+        print_only=print_only,
     )
 
     model_name = "logistic-with-transformer"
@@ -102,6 +106,7 @@ def main():
                 output.as_posix(),
             ]
         ),
+        print_only=print_only,
     )
 
 
