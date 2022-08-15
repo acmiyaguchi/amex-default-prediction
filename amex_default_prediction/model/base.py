@@ -445,7 +445,7 @@ def fit_simple_with_transformer(
             .withColumn(
                 "transformer_feature",
                 array_to_vector(
-                    F.co("prediction")
+                    F.col("prediction")
                     if truncate_predict is None
                     else F.slice("prediction", 1, truncate_predict)
                 ),
@@ -470,7 +470,7 @@ def fit_simple_with_transformer(
                         [
                             VectorAssembler(
                                 inputCols=["features", "transformer_feature"],
-                                outputCol="features_with_transformer",
+                                outputCol="feature_with_transformer",
                             )
                         ]
                         if not transformer_only
@@ -481,10 +481,10 @@ def fit_simple_with_transformer(
                         SELECT
                             customer_ID,
                             {
-                                "features_with_transformer"
+                                "transformer_feature"
                                 if not transformer_only
-                                else "features"
-                            } as feature,
+                                else "feature_with_transformer"
+                            } as features,
                             label
                         FROM __THIS__
                     """
