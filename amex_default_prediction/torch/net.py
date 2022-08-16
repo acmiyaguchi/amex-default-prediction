@@ -108,6 +108,12 @@ class PositionalEncoding(pl.LightningModule):
         return self.dropout(x)
 
 
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight)
+        m.bias.data.fill_(0.01)
+
+
 class TransformerModel(pl.LightningModule):
     """Container module with a positional encoder."""
 
@@ -123,16 +129,10 @@ class TransformerModel(pl.LightningModule):
         predict_reverse=False,
         **kwargs
     ):
-        super(TransformerModel, self).__init__()
+        super().__init__()
         self.save_hyperparameters()
 
         # add some extra-nonlinearity for embedding the input data
-
-        def init_weights(m):
-            if isinstance(m, nn.Linear):
-                torch.nn.init.xavier_uniform_(m.weight)
-                m.bias.data.fill_(0.01)
-
         self.input_net = nn.Sequential(
             nn.Dropout(self.hparams.dropout),
             nn.Linear(self.hparams.d_input, 1024),
@@ -270,4 +270,136 @@ class TransformerModel(pl.LightningModule):
         return {
             "customer_index": batch["customer_index"],
             "prediction": z.transpose(0, 1).reshape(z.shape[1], -1),
+        }
+
+
+class TransformerEmbeddingModel(pl.LightningModule):
+    """Container module with a positional encoder."""
+
+    def __init__(
+        self,
+        d_input,
+        d_model,
+        d_embed,
+        seq_len,
+        num_layers=6,
+        nhead=8,
+        max_len=1024,
+        dropout=0.1,
+        lr=1e-3,
+        warmup=500,
+        max_iters=20000,
+        predict_reverse=False,
+        **kwargs
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        # add some extra-nonlinearity for embedding the input data
+
+        def init_weights(m):
+            if isinstance(m, nn.Linear):
+                torch.nn.init.xavier_uniform_(m.weight)
+                m.bias.data.fill_(0.01)
+
+        self.input_net = nn.Sequential(
+            nn.Dropout(self.hparams.dropout),
+            nn.Linear(self.hparams.d_input, self.hparams.d_model),
+        )
+
+        self.pos_encoder = PositionalEncoding(
+            self.hparams.d_model,
+            dropout=self.hparams.dropout,
+            max_len=self.hparams.max_len,
+        )
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                self.hparams.d_model,
+                self.hparams.nhead,
+                dropout=self.hparams.dropout,
+                **kwargs
+            ),
+            self.hparams.num_layers,
+        )
+
+        # layer used for embedding the input data so it maps to the output data
+        dim = self.hparams.d_model * self.hparams.seq_len
+        self.output_net = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.LayerNorm(dim),
+            nn.ReLU(),
+            nn.Dropout(self.hparams.dropout),
+            nn.Linear(dim, self.hparams.d_embed),
+        )
+
+        # used to map the target to the data embedding
+        self.predict_net = nn.Sequential(
+            nn.Dropout(self.hparams.dropout),
+            nn.Linear(self.hparams.d_input, self.hparams.d_embed),
+        )
+
+        self.input_net.apply(init_weights)
+        self.output_net.apply(init_weights)
+        self.predict_net.apply(init_weights)
+
+    def forward(self, src, src_pos, src_key_padding_mask):
+        z = self.input_net(src.view(src.shape[0], -1, self.hparams.d_input))
+        src_mask = torch.zeros((z.shape[1], z.shape[1]), device=self.device).type(
+            torch.bool
+        )
+        # reshape x and y to be [batch_size, seq_len, embed_dim] and reorder
+        # dimensions to be [seq_len, batch_size, embed_dim]
+        z = self.transformer(
+            self.pos_encoder(z.transpose(0, 1), src_pos.transpose(0, 1)),
+            src_mask,
+            src_key_padding_mask=src_key_padding_mask.type(torch.bool),
+        )
+        # [batch_size, embed_dim]
+        z = self.output_net(z.transpose(0, 1).reshape(src.shape[0], -1))
+        return z
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        lr_scheduler = CosineWarmupScheduler(
+            optimizer=optimizer,
+            warmup=self.hparams.warmup,
+            max_iters=self.hparams.max_iters,
+        )
+        return [optimizer], [lr_scheduler]
+
+    def _step(self, batch, *args, **kwargs):
+        x, y, src_key_padding_mask, _, src_pos, _ = (
+            batch["src"],
+            batch["tgt"],
+            batch["src_key_padding_mask"],
+            batch["tgt_key_padding_mask"],
+            batch["src_pos"],
+            batch["tgt_pos"],
+        )
+        z = self.forward(x, src_pos, src_key_padding_mask)
+
+        y = y.view(y.shape[0], -1, self.hparams.d_input)
+        y = self.predict_net(y[:, 0, :])
+        mask = torch.ones(y.shape[0]).to(self.device)
+        return F.cosine_embedding_loss(z, y, mask)
+
+    def training_step(self, train_batch, batch_idx):
+        loss = self._step(train_batch)
+        self.log("loss", loss)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        loss = self._step(val_batch)
+        self.log("val_loss", loss)
+        return loss
+
+    def predict_step(self, batch, batch_idx):
+        x, src_key_padding_mask, src_pos = (
+            batch["src"],
+            batch["src_key_padding_mask"],
+            batch["src_pos"],
+        )
+        return {
+            "customer_index": batch["customer_index"],
+            "prediction": self.forward(x, src_pos, src_key_padding_mask),
         }

@@ -15,7 +15,11 @@ from amex_default_prediction.torch.data_module import (
     PetastormTransformerDataModule,
     get_spark_feature_size,
 )
-from amex_default_prediction.torch.net import StrawmanNet, TransformerModel
+from amex_default_prediction.torch.net import (
+    StrawmanNet,
+    TransformerEmbeddingModel,
+    TransformerModel,
+)
 from amex_default_prediction.torch.transform import (
     transform_into_transformer_pairs,
     transform_into_transformer_predict_pairs,
@@ -306,6 +310,35 @@ def test_transformer_with_manual_tensor_creation(
     z = model.predict_step(batch, 0)["prediction"].cpu().detach().numpy()
     series = pd.Series([list(z)])
     print(series)
+
+
+def test_transformer_embedding_model(spark, synthetic_transformer_train_df_path):
+    batch_size = 10
+    subsequence_length = 4
+    d_embed = 32
+    data_module = PetastormTransformerDataModule(
+        spark,
+        "file:///tmp",
+        synthetic_transformer_train_df_path,
+        batch_size=batch_size,
+        subsequence_length=subsequence_length,
+        num_partitions=2,
+        workers_count=2,
+    )
+    trainer = pl.Trainer(gpus=-1, fast_dev_run=True)
+    model = TransformerEmbeddingModel(
+        d_input=8, d_model=16, d_embed=d_embed, seq_len=subsequence_length
+    )
+    trainer.fit(model, datamodule=data_module)
+
+    predictions = trainer.predict(model, datamodule=data_module)
+    assert len(predictions) == 1
+    assert predictions[0]["prediction"].shape == torch.Size([batch_size, d_embed])
+
+    df = pd.DataFrame(
+        {k: v.cpu().detach().numpy().tolist() for k, v in predictions[0].items()}
+    )
+    assert df.shape == (batch_size, 2)
 
 
 @pytest.mark.skip(reason="known to fail")

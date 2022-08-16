@@ -12,15 +12,16 @@ def main(print_only):
     intermediate_root = data_root / "intermediate"
     build_wheel()
 
-    d_model = 32
+    d_model = 128
+    d_embed = 512
     sequence_length = 16
     max_position = 24
-    batch_size = 1750
-    layers = 3
+    batch_size = 4000
+    layers = 2
     age_months = True
-    predict_reverse = True
+    # predict_reverse = True
 
-    model_name = "torch-transformer"
+    model_name = "torch-transformer-embedding"
     torch_transformer_output = intermediate_root / "models" / model_name / unique_name()
     run_spark(
         " ".join(
@@ -34,6 +35,8 @@ def main(print_only):
                 torch_transformer_output.as_posix(),
                 "--d-model",
                 str(d_model),
+                "--d-embed",
+                str(d_embed),
                 "--sequence-length",
                 str(sequence_length),
                 "--max-position",
@@ -43,7 +46,6 @@ def main(print_only):
                 "--layers",
                 str(layers),
                 "--age-months" if age_months else "",
-                "--predict-reverse" if predict_reverse else "",
             ]
         ),
         spark_driver_memory="20g",
@@ -68,7 +70,7 @@ def main(print_only):
                 "--sequence-length",
                 str(sequence_length),
                 "--batch-size",
-                str(25000),
+                str(20_000),
                 "--age-months" if age_months else "",
             ]
         ),

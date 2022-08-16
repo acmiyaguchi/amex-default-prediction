@@ -16,7 +16,7 @@ from .data_module import (
     PetastormTransformerDataModule,
     get_spark_feature_size,
 )
-from .net import StrawmanNet, TransformerModel
+from .net import StrawmanNet, TransformerEmbeddingModel, TransformerModel
 
 
 @click.command()
@@ -58,6 +58,116 @@ def fit_strawman(
         ],
     )
     trainer.fit(model, dm)
+
+
+@click.command()
+@click.argument("test_data_preprocessed_path", type=click.Path(exists=True))
+@click.argument("pca_model_path", type=click.Path(exists=True))
+@click.argument("output_path", type=click.Path())
+@click.option("--train-ratio", default=0.8, type=float)
+@click.option("--cache-dir", default="file:///tmp")
+@click.option("--batch-size", default=4000, type=int)
+@click.option("--d-model", default=128, type=int)
+@click.option("--d-embed", default=128, type=int)
+@click.option("--sequence-length", default=16, type=int)
+@click.option("--max-position", default=1024, type=int)
+@click.option("--max-position", default=1024, type=int)
+@click.option("--layers", default=6, type=int)
+@click.option("--age-months/--no-age-months", default=False, type=bool)
+@click.option("--tune", default=False, type=bool)
+def fit_transformer_embedding(
+    test_data_preprocessed_path,
+    pca_model_path,
+    output_path,
+    train_ratio,
+    cache_dir,
+    batch_size,
+    d_model,
+    d_embed,
+    sequence_length,
+    max_position,
+    layers,
+    age_months,
+    tune,
+):
+    spark = spark_session()
+    input_size = get_spark_feature_size(
+        spark, test_data_preprocessed_path, pca_model_path
+    )
+    model = TransformerEmbeddingModel(
+        d_input=input_size,
+        d_model=d_model,
+        d_embed=d_embed,
+        seq_len=sequence_length,
+        max_len=max_position,
+        num_layers=layers,
+        lr=1e-3,
+        warmup=100,
+        max_iters=2_000,
+    )
+    # print(model)
+
+    wandb_logger = WandbLogger(
+        project="amex-default-prediction",
+        name=Path(output_path).name,
+        save_dir=output_path,
+    )
+
+    wandb_logger.experiment.config.update(
+        {
+            "sequence_length": sequence_length,
+            "batch_size": batch_size,
+            "age_months": age_months,
+            "tune": tune,
+        }
+    )
+
+    dm = PetastormTransformerDataModule(
+        spark,
+        cache_dir,
+        test_data_preprocessed_path,
+        pca_model_path=pca_model_path,
+        subsequence_length=sequence_length,
+        train_ratio=train_ratio,
+        batch_size=batch_size,
+        age_months=age_months,
+        predict_reverse=True,
+    )
+
+    trainer = pl.Trainer(
+        accelerator="gpu",
+        devices=-1,
+        **(
+            dict(
+                auto_lr_find=True,
+                auto_scale_batch_size="binsearch",
+            )
+            if tune
+            else {}
+        ),
+        default_root_dir=output_path,
+        detect_anomaly=True,
+        logger=[
+            TensorBoardLogger(output_path, log_graph=True),
+            wandb_logger,
+        ],
+        reload_dataloaders_every_n_epochs=1,
+        callbacks=[
+            EarlyStopping(monitor="val_loss", mode="min"),
+            ModelCheckpoint(
+                monitor="val_loss",
+                auto_insert_metric_name=True,
+                save_top_k=5,
+            ),
+            ModelCheckpoint(dirpath=output_path, filename="model", monitor="val_loss"),
+        ],
+        max_epochs=30,
+    )
+    if tune:
+        # optimize lr and batch size
+        trainer.tune(model, datamodule=dm)
+
+    trainer.fit(model, datamodule=dm)
 
 
 @click.command()
@@ -160,7 +270,7 @@ def fit_transformer(
             ),
             ModelCheckpoint(dirpath=output_path, filename="model", monitor="val_loss"),
         ],
-        max_epochs=30,
+        max_epochs=10,
     )
     if tune:
         # optimize lr and batch size
@@ -178,7 +288,6 @@ def fit_transformer(
 @click.option("--batch-size", default=4000, type=int)
 @click.option("--sequence-length", default=8, type=int)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
-@click.option("--parallelism", default=8, type=int)
 def transform_transformer(
     train_data_preprocessed_path,
     pca_model_path,
@@ -188,11 +297,10 @@ def transform_transformer(
     batch_size,
     sequence_length,
     age_months,
-    parallelism,
     **kwargs,
 ):
     spark = spark_session()
-    model = TransformerModel.load_from_checkpoint(checkpoint_path)
+    model = TransformerEmbeddingModel.load_from_checkpoint(checkpoint_path)
     model.freeze()
 
     dm = PetastormTransformerDataModule(
