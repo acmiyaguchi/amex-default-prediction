@@ -71,8 +71,9 @@ def fit_strawman(
 @click.option("--d-embed", default=128, type=int)
 @click.option("--sequence-length", default=16, type=int)
 @click.option("--max-position", default=1024, type=int)
-@click.option("--max-position", default=1024, type=int)
 @click.option("--layers", default=6, type=int)
+@click.option("--nhead", default=8, type=int)
+@click.option("--dropout", default=0.1, type=float)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
 @click.option("--tune", default=False, type=bool)
 def fit_transformer_embedding(
@@ -87,6 +88,8 @@ def fit_transformer_embedding(
     sequence_length,
     max_position,
     layers,
+    nhead,
+    dropout,
     age_months,
     tune,
 ):
@@ -101,6 +104,8 @@ def fit_transformer_embedding(
         seq_len=sequence_length,
         max_len=max_position,
         num_layers=layers,
+        nhead=nhead,
+        dropout=dropout,
         lr=1e-3,
         warmup=100,
         max_iters=2_000,
@@ -161,7 +166,7 @@ def fit_transformer_embedding(
             ),
             ModelCheckpoint(dirpath=output_path, filename="model", monitor="val_loss"),
         ],
-        max_epochs=30,
+        max_epochs=10,
     )
     if tune:
         # optimize lr and batch size

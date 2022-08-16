@@ -13,11 +13,13 @@ def main(print_only):
     build_wheel()
 
     d_model = 128
-    d_embed = 512
+    d_embed = 256
     sequence_length = 16
     max_position = 24
     batch_size = 4000
     layers = 2
+    nhead = 2
+    dropout = 0.2
     age_months = True
     # predict_reverse = True
 
