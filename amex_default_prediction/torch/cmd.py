@@ -76,6 +76,8 @@ def fit_strawman(
 @click.option("--dropout", default=0.1, type=float)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
 @click.option("--tune", default=False, type=bool)
+@click.option("--pca/--no-pca", default=True, type=bool)
+@click.option("--epochs", default=30, type=int)
 def fit_transformer_embedding(
     test_data_preprocessed_path,
     pca_model_path,
@@ -92,10 +94,12 @@ def fit_transformer_embedding(
     dropout,
     age_months,
     tune,
+    pca,
+    epochs,
 ):
     spark = spark_session()
     input_size = get_spark_feature_size(
-        spark, test_data_preprocessed_path, pca_model_path
+        spark, test_data_preprocessed_path, pca_model_path if pca else None
     )
     model = TransformerEmbeddingModel(
         d_input=input_size,
@@ -131,7 +135,7 @@ def fit_transformer_embedding(
         spark,
         cache_dir,
         test_data_preprocessed_path,
-        pca_model_path=pca_model_path,
+        pca_model_path=pca_model_path if pca else None,
         subsequence_length=sequence_length,
         train_ratio=train_ratio,
         batch_size=batch_size,
@@ -166,7 +170,7 @@ def fit_transformer_embedding(
             ),
             ModelCheckpoint(dirpath=output_path, filename="model", monitor="val_loss"),
         ],
-        max_epochs=10,
+        max_epochs=epochs,
     )
     if tune:
         # optimize lr and batch size
@@ -293,6 +297,7 @@ def fit_transformer(
 @click.option("--batch-size", default=4000, type=int)
 @click.option("--sequence-length", default=8, type=int)
 @click.option("--age-months/--no-age-months", default=False, type=bool)
+@click.option("--pca/--no-pca", default=True, type=bool)
 def transform_transformer(
     train_data_preprocessed_path,
     pca_model_path,
@@ -302,6 +307,7 @@ def transform_transformer(
     batch_size,
     sequence_length,
     age_months,
+    pca,
     **kwargs,
 ):
     spark = spark_session()
@@ -312,7 +318,7 @@ def transform_transformer(
         spark,
         cache_dir,
         train_data_preprocessed_path,
-        pca_model_path=pca_model_path,
+        pca_model_path=pca_model_path if pca else None,
         subsequence_length=sequence_length,
         batch_size=batch_size,
         age_months=age_months,

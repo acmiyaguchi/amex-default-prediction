@@ -18,9 +18,11 @@ def main(print_only):
     max_position = 24
     batch_size = 4000
     layers = 2
-    nhead = 2
+    nhead = 8
     dropout = 0.2
     age_months = True
+    pca = False
+    epochs = 10
     # predict_reverse = True
 
     model_name = "torch-transformer-embedding"
@@ -48,6 +50,13 @@ def main(print_only):
                 "--layers",
                 str(layers),
                 "--age-months" if age_months else "",
+                "--nhead",
+                str(nhead),
+                "--dropout",
+                str(dropout),
+                "--pca" if pca else "--no-pca",
+                "--epochs",
+                str(epochs),
             ]
         ),
         spark_driver_memory="20g",
@@ -74,6 +83,7 @@ def main(print_only):
                 "--batch-size",
                 str(20_000),
                 "--age-months" if age_months else "",
+                "--pca" if pca else "--no-pca",
             ]
         ),
         spark_driver_memory="20g",

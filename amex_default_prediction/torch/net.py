@@ -335,7 +335,10 @@ class TransformerEmbeddingModel(pl.LightningModule):
         # used to map the target to the data embedding
         self.predict_net = nn.Sequential(
             nn.Dropout(self.hparams.dropout),
-            nn.Linear(self.hparams.d_input, self.hparams.d_embed),
+            nn.Linear(self.hparams.d_input, self.hparams.d_model),
+            nn.ReLU(),
+            nn.Dropout(self.hparams.dropout),
+            nn.Linear(self.hparams.d_model, self.hparams.d_embed),
         )
 
         self.input_net.apply(init_weights)
