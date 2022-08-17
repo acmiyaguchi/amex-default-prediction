@@ -282,7 +282,9 @@ def test_transformer_with_manual_tensor_creation(
 
     predictions = trainer.predict(model, datamodule=data_module)
     assert len(predictions) == 1
-    assert predictions[0].shape == torch.Size([subsequence_length, batch_size, 8])
+    assert predictions[0]["prediction"].shape == torch.Size(
+        [subsequence_length, batch_size, 8]
+    )
 
     model_checkpoint = tmp_path / "model.ckpt"
     trainer.save_checkpoint(model_checkpoint.as_posix())

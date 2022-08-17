@@ -59,7 +59,7 @@ def main(print_only):
                 str(epochs),
             ]
         ),
-        spark_driver_memory="20g",
+        spark_driver_memory="30g",
         print_only=print_only,
     )
 
@@ -86,7 +86,7 @@ def main(print_only):
                 "--pca" if pca else "--no-pca",
             ]
         ),
-        spark_driver_memory="20g",
+        spark_driver_memory="30g",
         print_only=print_only,
     )
 

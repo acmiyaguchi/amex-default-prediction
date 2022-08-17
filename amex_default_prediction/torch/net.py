@@ -346,10 +346,12 @@ class TransformerEmbeddingModel(pl.LightningModule):
     def forward(self, src, src_pos, src_key_padding_mask):
         z = self.input_net(src.view(src.shape[0], -1, self.hparams.d_input))
         sz = z.shape[1]
-        src_mask = torch.zeros((sz, sz), device=self.device).type(torch.bool)
-        # src_mask = (torch.triu(torch.ones(sz, sz, device=self.device)) == 1).type(
-        #     torch.bool
-        # )
+        # src_mask = torch.zeros((sz, sz), device=self.device).type(torch.bool)
+        src_mask = (
+            (torch.triu(torch.ones(sz, sz, device=self.device)) == 0)
+            .flip(0)
+            .type(torch.bool)
+        )
         # reshape x and y to be [batch_size, seq_len, embed_dim] and reorder
         # dimensions to be [seq_len, batch_size, embed_dim]
         z = self.transformer(
