@@ -12,14 +12,14 @@ def main(print_only):
     intermediate_root = data_root / "intermediate"
     build_wheel()
 
-    d_model = 128
-    d_embed = 256
-    sequence_length = 16
+    d_model = 64
+    d_embed = 128
+    sequence_length = 8
     max_position = 24
     batch_size = 4000
     layers = 2
-    nhead = 8
-    dropout = 0.2
+    nhead = 4
+    dropout = 0.1
     age_months = True
     pca = True
     epochs = 10
