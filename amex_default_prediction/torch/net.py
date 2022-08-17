@@ -334,8 +334,6 @@ class TransformerEmbeddingModel(pl.LightningModule):
 
         # used to map the target to the data embedding
         self.predict_net = nn.Sequential(
-            nn.Dropout(self.hparams.dropout),
-            nn.Linear(self.hparams.d_input, self.hparams.d_model),
             nn.ReLU(),
             nn.Dropout(self.hparams.dropout),
             nn.Linear(self.hparams.d_model, self.hparams.d_embed),
@@ -347,9 +345,11 @@ class TransformerEmbeddingModel(pl.LightningModule):
 
     def forward(self, src, src_pos, src_key_padding_mask):
         z = self.input_net(src.view(src.shape[0], -1, self.hparams.d_input))
-        src_mask = torch.zeros((z.shape[1], z.shape[1]), device=self.device).type(
-            torch.bool
-        )
+        sz = z.shape[1]
+        src_mask = torch.zeros((sz, sz), device=self.device).type(torch.bool)
+        # src_mask = (torch.triu(torch.ones(sz, sz, device=self.device)) == 1).type(
+        #     torch.bool
+        # )
         # reshape x and y to be [batch_size, seq_len, embed_dim] and reorder
         # dimensions to be [seq_len, batch_size, embed_dim]
         z = self.transformer(
@@ -371,7 +371,7 @@ class TransformerEmbeddingModel(pl.LightningModule):
         return [optimizer], [lr_scheduler]
 
     def _step(self, batch, *args, **kwargs):
-        x, y, src_key_padding_mask, _, src_pos, _ = (
+        x, y, src_key_padding_mask, _, src_pos, tgt_pos = (
             batch["src"],
             batch["tgt"],
             batch["src_key_padding_mask"],
@@ -382,7 +382,12 @@ class TransformerEmbeddingModel(pl.LightningModule):
         z = self.forward(x, src_pos, src_key_padding_mask)
 
         y = y.view(y.shape[0], -1, self.hparams.d_input)
-        y = self.predict_net(y[:, 0, :])
+        y = self.input_net(y[:, :1, :])
+        y = self.pos_encoder(
+            y.transpose(0, 1),
+            tgt_pos.transpose(0, 1)[:1, :],
+        )
+        y = self.predict_net(y[0])
         mask = torch.ones(y.shape[0]).to(self.device)
         return F.cosine_embedding_loss(z, y, mask)
 

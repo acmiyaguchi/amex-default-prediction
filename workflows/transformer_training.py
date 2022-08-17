@@ -21,7 +21,7 @@ def main(print_only):
     nhead = 8
     dropout = 0.2
     age_months = True
-    pca = False
+    pca = True
     epochs = 10
     # predict_reverse = True
 
