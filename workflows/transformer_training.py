@@ -17,8 +17,8 @@ def main(print_only):
     sequence_length = 8
     max_position = 24
     batch_size = 4000
-    layers = 2
-    nhead = 4
+    layers = 1
+    nhead = 1
     dropout = 0.1
     age_months = True
     pca = True
