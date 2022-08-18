@@ -325,16 +325,12 @@ class TransformerEmbeddingModel(pl.LightningModule):
         # layer used for embedding the input data so it maps to the output data
         dim = self.hparams.d_model * self.hparams.seq_len
         self.output_net = nn.Sequential(
-            nn.Linear(dim, dim),
-            nn.LayerNorm(dim),
-            nn.ReLU(),
             nn.Dropout(self.hparams.dropout),
             nn.Linear(dim, self.hparams.d_embed),
         )
 
         # used to map the target to the data embedding
         self.predict_net = nn.Sequential(
-            nn.ReLU(),
             nn.Dropout(self.hparams.dropout),
             nn.Linear(self.hparams.d_model, self.hparams.d_embed),
         )
