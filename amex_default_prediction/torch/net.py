@@ -386,8 +386,8 @@ class TransformerEmbeddingModel(pl.LightningModule):
             tgt_pos.transpose(0, 1)[:1, :],
         )
         y = self.predict_net(y[0])
-        mask = torch.ones(y.shape[0]).to(self.device)
-        return F.cosine_embedding_loss(z, y, mask)
+        # mask = torch.ones(y.shape[0]).to(self.device)
+        return F.mse_loss(z, y)
 
     def training_step(self, train_batch, batch_idx):
         loss = self._step(train_batch)
