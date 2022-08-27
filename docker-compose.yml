@@ -2,4 +2,4 @@ version: "3.8"
 services:
   app:
     build: .
-    image: us-central1-docker.pkg.dev/amex-default-prediction-2022/amex-default-prediction-2022/amex-default-prediction:latest
+    image: us-central1-docker.pkg.dev/amex-default-prediction-2022/amex-default-prediction-2022/amex-default-prediction-2022:latest

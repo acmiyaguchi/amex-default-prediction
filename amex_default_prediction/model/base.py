@@ -134,9 +134,6 @@ class LogFeatureTransformer(
         )
 
 
-from pytorch_lightning.utilities.memory import get_model_size_mb
-
-
 class TransformerInferenceTransformer(
     Transformer,
     HasInputCol,
@@ -433,6 +430,8 @@ def fit_simple_with_transformer(
     train_transformer_path,
     output_path,
     parallelism=4,
+    truncate_predict=None,
+    transformer_only=False,
     **kwargs,
 ):
     def read_func(spark, train_data_preprocessed_path, train_ratio, *args, **kwargs):
@@ -443,7 +442,14 @@ def fit_simple_with_transformer(
         df = (
             df.withColumn("customer_index", F.hash("customer_ID"))
             .join(transformer_df, on="customer_index", how="inner")
-            .withColumn("features", array_to_vector("prediction"))
+            .withColumn(
+                "transformer_feature",
+                array_to_vector(
+                    F.col("prediction")
+                    if truncate_predict is None
+                    else F.slice("prediction", 1, truncate_predict)
+                ),
+            )
             .repartition(spark.sparkContext.defaultParallelism * 2)
             .cache()
         )
@@ -459,11 +465,26 @@ def fit_simple_with_transformer(
         CrossValidator(
             estimator=Pipeline(
                 stages=[
+                    # vector assembler
+                    *(
+                        [
+                            VectorAssembler(
+                                inputCols=["features", "transformer_feature"],
+                                outputCol="feature_with_transformer",
+                            )
+                        ]
+                        if not transformer_only
+                        else []
+                    ),
                     SQLTransformer(
-                        statement="""
+                        statement=f"""
                         SELECT
                             customer_ID,
-                            features,
+                            {
+                                "transformer_feature"
+                                if not transformer_only
+                                else "feature_with_transformer"
+                            } as features,
                             label
                         FROM __THIS__
                     """

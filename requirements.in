@@ -2,6 +2,10 @@
 -f https://download.pytorch.org/whl/cu113/torch_stable.html
 torch==1.12.1+cu113
 
+# system related
+pywin32; sys_platform == 'win32'
+pywinpty; sys_platform == 'win32'
+
 # notebooking
 jupyterlab
 nb_black

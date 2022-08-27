@@ -27,7 +27,7 @@ def pad_tgt(field, pad, length):
     )
 
 
-def features_age_list(df):
+def features_age_list(df, age_months=False):
     w = Window.partitionBy("customer_ID").orderBy("age_days")
     return (
         df.withColumn("features", vector_to_array("features").cast("array<float>"))
@@ -35,7 +35,11 @@ def features_age_list(df):
             "customer_ID",
             F.collect_list("features").over(w).alias("features_list"),
             # age encoded into a sequence position
-            F.collect_list((F.col("age_days") + 1).astype("long"))
+            F.collect_list(
+                (
+                    (F.col("age_days") / 28 if age_months else F.col("age_days")) + 1
+                ).astype("long")
+            )
             .over(w)
             .alias("age_days_list"),
         )
@@ -49,7 +53,7 @@ def features_age_list(df):
     )
 
 
-def transform_into_transformer_pairs(df, length=4):
+def transform_into_transformer_pairs(df, length=4, age_months=False):
     """Convert the training/test dataset for use in a transformer."""
 
     def slice_src(field, length):
@@ -71,7 +75,7 @@ def transform_into_transformer_pairs(df, length=4):
         )
 
     return (
-        features_age_list(df)
+        features_age_list(df, age_months=age_months)
         .where("n > 1")
         # this is not pleasant to read, but at least it doesn't require a UDF...
         .withColumn("src", slice_src("features_list", length))
@@ -119,14 +123,14 @@ def transform_into_transformer_pairs(df, length=4):
     )
 
 
-def transform_into_transformer_predict_pairs(df, length=4):
+def transform_into_transformer_predict_pairs(df, length=4, age_months=False):
     def slice_src(field, length):
         return F.when(F.col("n") <= length, F.col(field)).otherwise(
             F.slice(F.col(field), -length, length)
         )
 
     return (
-        features_age_list(df)
+        features_age_list(df, age_months=age_months)
         .where("n >= 1")
         .withColumn("src", slice_src("features_list", length))
         .withColumn("src_pos", slice_src("age_days_list", length))
@@ -143,11 +147,33 @@ def transform_into_transformer_predict_pairs(df, length=4):
                 F.array_repeat(F.lit(0), F.col("k_src")),
             ),
         )
+        .withColumn("src_array", F.col("src"))
         .withColumn("src", F.flatten("src"))
         .select(
             "customer_ID",
             "src",
             "src_key_padding_mask",
             "src_pos",
+            "src_array",
         )
+    )
+
+
+def transform_into_transformer_reverse_pairs(df, length=4, age_months=False):
+    # drop the last item of the src column, and make the tgt the reverse of the src
+    def drop_last(field, length=1):
+        field = F.col(field) if isinstance(field, str) else field
+        return F.slice(field, 1, F.size(field) - length)
+
+    pairs = transform_into_transformer_predict_pairs(df, length + 1, age_months)
+    return pairs.where("n > 1").select(
+        "customer_ID",
+        F.flatten(drop_last("src_array")).alias("src"),
+        drop_last("src_key_padding_mask").alias("src_key_padding_mask"),
+        drop_last("src_pos").alias("src_pos"),
+        F.flatten(drop_last(F.reverse(F.col("src_array")))).alias("tgt"),
+        drop_last(F.reverse(F.col("src_key_padding_mask"))).alias(
+            "tgt_key_padding_mask"
+        ),
+        drop_last(F.reverse(F.col("src_pos"))).alias("tgt_pos"),
     )
